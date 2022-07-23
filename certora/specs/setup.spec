@@ -136,3 +136,108 @@ hook Sstore _balances[KEY address user].balance uint104 balance
 */
 invariant totalSupplyEqualsBalances()
     sumBalances == totalSupply()
+
+
+/**
+    The sum of all delegated voting balance must be less or equal to the totalSupply
+*/
+ghost mathint sumDelegatedVotingBalances {
+    init_state axiom sumDelegatedVotingBalances == 0;
+}
+
+
+hook Sstore _balances[KEY address user].delegatedVotingBalance uint72 new_delegated_voting_balance
+    (uint72 old_delegated_voting_balance) STORAGE {
+        sumDelegatedVotingBalances = sumDelegatedVotingBalances - to_mathint(old_delegated_voting_balance) + to_mathint(new_delegated_voting_balance);
+    }
+
+// TODO: Fix
+invariant totalDelegatedVotingBalanceLessOrEqualsTotalSupply()
+    sumDelegatedVotingBalances <= normalize(totalSupply())
+
+
+
+/**
+    It is not possible to delegate to the 0 address, the only voting power it has is its balance
+*/
+invariant zeroAddressCanNotBeDelegatedTo()
+    getDelegatedVotingBalance(0) == balanceOf(0) && getDelegatedPropositionBalance(0) == balanceOf(0)
+
+
+// TODO: Continue debugging
+rule transferReducesVotingPower(env e, address to, uint256 amount){
+    // Has to have enough balance for the transfer
+    require balanceOf(e.msg.sender) >= amount;
+    // Power won't reduce if send to themself
+    require to != e.msg.sender;
+    // Can't send ERC20 to 0
+    require to != 0;
+
+    // Get the delegates, if the delegate is 0 this means it gets delegated to the user themselves
+    address votingDelegate = getVotingDelegate(e.msg.sender);
+    votingDelegate = votingDelegate == 0 ? e.msg.sender : votingDelegate;
+    require getVotingDelegate(to) != votingDelegate;
+
+    address propositionDelegate = getPropositionDelegate(e.msg.sender);
+    propositionDelegate = propositionDelegate == 0 ? e.msg.sender : propositionDelegate;
+    address recipientPropDelegate = getPropositionDelegate(to);
+    require recipientPropDelegate != propositionDelegate;
+
+    // delegates can't be the to address because then the power stays the same
+    require votingDelegate != to && propositionDelegate != to;
+
+    uint256 votingPowerBefore = getPowerCurrent(votingDelegate, VOTING_POWER());
+    uint256 propositionPowerBefore = getPowerCurrent(propositionDelegate, PROPOSITION_POWER());
+
+    // TODO: remove
+    require propositionPowerBefore >= amount;
+
+    transfer(e, to, amount);
+
+    uint256 votingPowerAfter = getPowerCurrent(votingDelegate, VOTING_POWER());
+    uint256 propositionPowerAfter = getPowerCurrent(propositionDelegate, PROPOSITION_POWER());
+
+    assert getDelegatedVotingBalance(e.msg.sender) < votingPowerBefore;
+    //assert propositionPowerBefore - normalize(amount) == propositionPowerAfter;
+}
+
+/**
+   Alice can only change Bobs delegate through a valid meta transaction
+*/
+rule anotherUserCanOnlyChangeDelegateThroughMeta(env e, address user, method f) {
+    address votingDelegateBefore = getVotingDelegate(user);
+    address propositionDelegateAfter = getPropositionDelegate(user);
+
+    calldataarg args;
+
+    f(e, args);
+
+    // If the delegate changed it must be the user who send the tx
+    assert (
+        votingDelegateBefore != getVotingDelegate(user) ||
+        propositionDelegateAfter != getPropositionDelegate(user)
+    ) && (
+        f.selector != metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector &&
+        f.selector != metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector
+    )=> e.msg.sender == user;
+}
+
+/**
+    From the properties.md
+    If an account is not receiving delegation of power (one type) from anybody,
+    and that account is not delegating that power to anybody, the power of that account must be equal to its AAVE balance.
+*/
+// TODO: Finalize
+rule nonDelegatingUserPowerEqBalance(address user){
+    // User is not delegating proposition to anyone
+    require getPropositionDelegate(user) == 0; 
+    // User is not delegating voting to anyone
+    require getVotingDelegate(user) == 0;
+    // User is not being proposition delegated by anyone else
+    require getDelegatedPropositionBalance(user) == 0;
+    // User is not being voting delegated by anyone else
+    require getDelegatedVotingBalance(user) == 0;
+
+    assert getPowerCurrent(user, VOTING_POWER()) == balanceOf(user) &&
+             getPowerCurrent(user, PROPOSITION_POWER()) == balanceOf(user);
+}
