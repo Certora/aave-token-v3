@@ -407,6 +407,10 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
 //     bool delegatingVoting;
 //   }
 
+  function getDelegationState(address user) view public returns (DelegationState) {
+    return _balances[user].delegationState;
+  }
+
 
    function getBalance(address user) view public returns (uint104) {
     return _balances[user].balance;
@@ -439,6 +443,14 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
 
    function getPropositionDelegate(address user) view public returns (address) {
     return _propositionDelegateeV2[user];
+   }
+
+   function getNonce(address user) view public returns (uint256) {
+    return _nonces[user];
+   }
+
+   function getAllowance(address owner, address spender) view public returns (uint256) {
+    return _allowances[owner][spender];
    }
 
 
