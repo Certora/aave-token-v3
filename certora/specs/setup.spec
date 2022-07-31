@@ -100,19 +100,34 @@ hook Sstore _balances[KEY address user].delegatedVotingBalance uint72 delegatedV
 invariant totalSupplyEqualsBalances()
     sumBalances == totalSupply()
 
+invariant totalSupplyGreaterThanSumOFBalanceOfUser(address user1, address user2) 
+    balanceOf(user1) + balanceOf(user2) <= totalSupply()
+
 /**
     invariant
     TotalSupply is greater than or equal to sum of delegated proposition balance
 */
-invariant totalSupplyGreaterOrEqualsDelegatedPropositionBalanceSum()
+invariant totalSupplyGreaterOrEqualsDelegatedPropositionBalanceSum(address user1, address user2)
     delegatedPropositionBalanceSum <= normalize(totalSupply())
+    { 
+        preserved
+        {
+            requireInvariant totalSupplyGreaterThanSumOFBalanceOfUser(user1, user2);
+        }
+    }
 
 /**
     invariant
     TotalSupply is greater than or equal to sum of delegated voting balance
 */
-invariant totalSupplyGreaterOrEqualsDelegatedVotingBalanceSum()
+invariant totalSupplyGreaterOrEqualsDelegatedVotingBalanceSum(address user1, address user2)
     delegatedVotingBalanceSum <= normalize(totalSupply())
+     { 
+        preserved
+        {
+            requireInvariant totalSupplyGreaterThanSumOFBalanceOfUser(user1, user2);
+        }
+    }
 
 
 /**
@@ -122,6 +137,9 @@ invariant totalSupplyGreaterOrEqualsDelegatedVotingBalanceSum()
 */
 invariant zeroAddressDoesNotHaveBalanceOrPower() 
     balanceOf(0) == 0 && getDelegatedPropositionBalance(0) == 0 && getDelegatedVotingBalance(0) == 0
+
+invariant addressZeroDoesNotHaveAnyPower()
+    getBalance(0) == 0 && getPowerCurrent(0, VOTING_POWER()) == 0 && getPowerCurrent(0, PROPOSITION_POWER()) == 0
 
 /**
     Rule
@@ -283,19 +301,28 @@ rule delegateIntegrity() {
     require delegatee != e.msg.sender;
     require delegatee != 0;
 
+    mathint votingPowerBefore = getPowerCurrent(delegatee, VOTING_POWER());
+    mathint propositionPowerBefore = getPowerCurrent(delegatee, PROPOSITION_POWER());
     address votingDelegateBefore = getVotingDelegate(e.msg.sender);
     address propositionDelegateBefore = getPropositionDelegate(e.msg.sender);
     mathint delegatedVotingBalanceBefore = getDelegatedVotingBalance(delegatee);
     mathint delegatedPropositionBalanceBefore = getDelegatedPropositionBalance(delegatee);
-    mathint balanceOfSenderBefore = getBalance(e.msg.sender);
+    uint256 balanceOfSenderBefore = getBalance(e.msg.sender);
 
     delegate(e, delegatee);
 
+    mathint votingPowerAfter = getPowerCurrent(delegatee, VOTING_POWER());
+    mathint propositionPowerAfter = getPowerCurrent(delegatee, PROPOSITION_POWER());
     address votingDelegateAfter = getVotingDelegate(e.msg.sender);
     address propositionDelegateAfter = getPropositionDelegate(e.msg.sender);
     mathint delegatedVotingBalanceAfter = getDelegatedVotingBalance(delegatee);
     mathint delegatedPropositionBalanceAfter = getDelegatedPropositionBalance(delegatee);
     mathint balanceOfSenderAfter = getBalance(e.msg.sender);
+
+    assert delegatee != votingDelegateBefore => votingPowerBefore + normalize(balanceOfSenderBefore) == votingPowerAfter, 
+    "voting power increases by balance of sender when delegate is called";
+    assert delegatee!=propositionDelegateBefore => propositionPowerBefore+normalize(balanceOfSenderBefore)==propositionPowerAfter,     
+    "proposition power increases by balance of sender when delegate is called";
 
     assert delegatee != votingDelegateBefore => delegatedVotingBalanceBefore + balanceOfSenderBefore/DELEGATED_POWER_DIVIDER() == delegatedVotingBalanceAfter,
     "voting delegate balance increases by balance of sender when delegate is called";
@@ -326,20 +353,29 @@ rule delegateByTypeIntegrity() {
     require propositionDelegatee != e.msg.sender;
     require propositionDelegatee != 0;
 
+    mathint votingPowerBefore = getPowerCurrent(votingDelegatee, VOTING_POWER());
+    mathint propositionPowerBefore = getPowerCurrent(propositionDelegatee, PROPOSITION_POWER());
     address votingDelegateBefore = getVotingDelegate(e.msg.sender);
     address propositionDelegateBefore = getPropositionDelegate(e.msg.sender);
     mathint delegatedVotingBalanceBefore = getDelegatedVotingBalance(votingDelegatee);
     mathint delegatedPropositionBalanceBefore = getDelegatedPropositionBalance(propositionDelegatee);
-    mathint balanceOfSenderBefore = getBalance(e.msg.sender);
+    uint256 balanceOfSenderBefore = getBalance(e.msg.sender);
 
     delegateByType(e, votingDelegatee, VOTING_POWER());
     delegateByType(e, propositionDelegatee, PROPOSITION_POWER());
 
+    mathint votingPowerAfter = getPowerCurrent(votingDelegatee, VOTING_POWER());
+    mathint propositionPowerAfter = getPowerCurrent(propositionDelegatee, PROPOSITION_POWER());
     address votingDelegateAfter = getVotingDelegate(e.msg.sender);
     address propositionDelegateAfter = getPropositionDelegate(e.msg.sender);
     mathint delegatedVotingBalanceAfter = getDelegatedVotingBalance(votingDelegatee);
     mathint delegatedPropositionBalanceAfter = getDelegatedPropositionBalance(propositionDelegatee);
     mathint balanceOfSenderAfter = getBalance(e.msg.sender);
+
+    assert votingDelegatee != votingDelegateBefore => votingPowerBefore + normalize(balanceOfSenderBefore) == votingPowerAfter, 
+    "voting power increases by balance of sender when delegateByType is called";
+    assert propositionDelegatee != propositionDelegateBefore => propositionPowerBefore+normalize(balanceOfSenderBefore)==propositionPowerAfter,     
+    "proposition power increases by balance of sender when delegateByType is called";
 
     assert votingDelegatee != votingDelegateBefore => delegatedVotingBalanceBefore + balanceOfSenderBefore/DELEGATED_POWER_DIVIDER() == delegatedVotingBalanceAfter,
     "voting delegate balance increases by balance of sender when delegateByType is called";
@@ -372,6 +408,8 @@ rule equivalenceOfDelegateAndDelegateByType() {
     address propositionDelegateBeforeDelegate = getPropositionDelegate(e.msg.sender);
     mathint delegatedVotingBalanceBeforeDelegate = getDelegatedVotingBalance(delegatee);
     mathint delegatedPropositionBalanceBeforeDelegate = getDelegatedPropositionBalance(delegatee);
+    mathint votingPowerBeforeDelegate = getPowerCurrent(delegatee, VOTING_POWER());
+    mathint propositionPowerBeforeDelegate = getPowerCurrent(delegatee, PROPOSITION_POWER());
 
     delegate(e, delegatee);
 
@@ -379,9 +417,13 @@ rule equivalenceOfDelegateAndDelegateByType() {
     address propositionDelegateAfterDelegate = getPropositionDelegate(e.msg.sender);
     mathint delegatedVotingBalanceAfterDelegate = getDelegatedVotingBalance(delegatee);
     mathint delegatedPropositionBalanceAfterDelegate = getDelegatedPropositionBalance(delegatee);
+    mathint votingPowerAfterDelegate = getPowerCurrent(delegatee, VOTING_POWER());
+    mathint propositionPowerAfterDelegate = getPowerCurrent(delegatee, PROPOSITION_POWER());
 
     address votingDelegateBeforeDelegateType = getVotingDelegate(e.msg.sender) at initialState;
     address propositionDelegateBeforeDelegateType = getPropositionDelegate(e.msg.sender);
+    mathint votingPowerBeforeDelegateType = getPowerCurrent(delegatee, VOTING_POWER());
+    mathint propositionPowerBeforeDelegateType = getPowerCurrent(delegatee, PROPOSITION_POWER());
     mathint delegatedVotingBalanceBeforeDelegateType = getDelegatedVotingBalance(delegatee);
     mathint delegatedPropositionBalanceBeforeDelegateType = getDelegatedPropositionBalance(delegatee);
 
@@ -390,8 +432,16 @@ rule equivalenceOfDelegateAndDelegateByType() {
 
     address votingDelegateAfterDelegateType = getVotingDelegate(e.msg.sender);
     address propositionDelegateAfterDelegateType = getPropositionDelegate(e.msg.sender);
+    mathint votingPowerAfterDelegateType = getPowerCurrent(delegatee, VOTING_POWER());
+    mathint propositionPowerAfterDelegateType = getPowerCurrent(delegatee, PROPOSITION_POWER());
     mathint delegatedVotingBalanceAfterDelegateType = getDelegatedVotingBalance(delegatee);
     mathint delegatedPropositionBalanceAfterDelegateType = getDelegatedPropositionBalance(delegatee);
+
+    assert votingPowerAfterDelegate == votingPowerAfterDelegateType,
+    "voting power should be same after delegate and delegateByType of voting power";
+
+    assert propositionPowerAfterDelegate == propositionPowerAfterDelegateType,
+    "proposition delegate should be same after delegate and delegateByType of proposition power";
 
     assert votingDelegateAfterDelegate == votingDelegateAfterDelegateType, 
     "voting delegate should be same after delegate and delegateByType of voting power";
@@ -405,6 +455,44 @@ rule equivalenceOfDelegateAndDelegateByType() {
     assert delegatedPropositionBalanceAfterDelegate == delegatedPropositionBalanceAfterDelegateType,
     "delegated proposition balance should be equal after delegate and delegateByType of proposition power";
 
+}
+
+rule delegatingSecondTimeResetTheStateOfFirstDelegatee() {
+    address delegatee1;
+    address delegatee2;
+    address deadline;
+    uint8 v;
+    bytes32 r;
+    bytes32 s;
+    env e;
+    storage initialState = lastStorage;
+
+    require delegatee1 != delegatee2;
+    require delegatee1 != 0 && delegatee2 != 0;
+    require e.msg.sender != 0 && e.msg.sender != delegatee1 && e.msg.sender != delegatee2;
+
+    uint256 balanceOfSenderBefore = getBalance(e.msg.sender);
+
+    delegate(e, delegatee1);
+
+    mathint votingDelegatedBalanceOfDelegatee1BeforeDelegate = getDelegatedVotingBalance(delegatee1);
+    mathint propositionDelegatedBalanceOfDelegatee1BeforeDelegate = getDelegatedPropositionBalance(delegatee1);
+    mathint votingDelegatedBalanceOfDelegatee2BeforeDelegate = getDelegatedVotingBalance(delegatee2);
+    mathint propositionDelegatedBalanceOfDelegatee2BeforeDelegate = getDelegatedPropositionBalance(delegatee2);
+
+    delegate(e, delegatee2);
+
+    mathint votingDelegatedBalanceOfDelegatee1AfterDelegate = getDelegatedVotingBalance(delegatee1);
+    mathint propositionDelegatedBalanceOfDelegatee1AfterDelegate = getDelegatedPropositionBalance(delegatee1);
+    mathint votingDelegatedBalanceOfDelegatee2AfterDelegate = getDelegatedVotingBalance(delegatee2);
+    mathint propositionDelegatedBalanceOfDelegatee2AfterDelegate = getDelegatedPropositionBalance(delegatee2);
+    mathint balanceOfSenderAfter = getBalance(e.msg.sender);
+
+    assert votingDelegatedBalanceOfDelegatee1AfterDelegate + balanceOfSenderBefore/DELEGATED_POWER_DIVIDER() == votingDelegatedBalanceOfDelegatee1BeforeDelegate;
+    assert propositionDelegatedBalanceOfDelegatee1AfterDelegate + balanceOfSenderBefore/DELEGATED_POWER_DIVIDER() == propositionDelegatedBalanceOfDelegatee1BeforeDelegate;
+    assert votingDelegatedBalanceOfDelegatee2BeforeDelegate + balanceOfSenderBefore/DELEGATED_POWER_DIVIDER() == votingDelegatedBalanceOfDelegatee2AfterDelegate;
+    assert propositionDelegatedBalanceOfDelegatee2BeforeDelegate + balanceOfSenderBefore/DELEGATED_POWER_DIVIDER() == propositionDelegatedBalanceOfDelegatee2AfterDelegate;
+    assert balanceOfSenderBefore == balanceOfSenderAfter;
 }
 
 rule delegationToItselfOrZeroAddressDoesNothing() {
@@ -851,7 +939,7 @@ rule otherUserCanOnlyChangeDelegateThroughMetaFunctions() {
     address propositionDelegateOfUserAfter = getPropositionDelegate(user);
 
     assert (votingDelegateOfUserBefore != votingDelegateOfUserAfter || 
-    propositionDelegateOfUserBefore != propositionDelegateOfUserBefore
+    propositionDelegateOfUserBefore != propositionDelegateOfUserAfter
     ) && (
         e.msg.sender != user
     ) => (
@@ -900,6 +988,26 @@ rule transferEffectOnPower() {
     assert user2PowerAfter == user2PowerBefore && user2PowerAfter == 0;
     assert delegatee2PowerAfter >= delegatee2PowerBefore;
 
+}
+
+rule stateChangeOfDelegation() {
+    env e;
+    address user;
+    method f;
+    calldataarg args;
+
+    uint8 delegationStateBefore = getDelegationState(user);
+
+    f(e, args);
+
+    uint8 delegationStateAfter = getDelegationState(user);
+
+    require delegationStateBefore != delegationStateAfter;
+
+    assert f.selector == delegate(address).selector || 
+    f.selector == delegateByType(address,uint8).selector || 
+    f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector || 
+    f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
