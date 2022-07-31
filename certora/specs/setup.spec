@@ -23,6 +23,11 @@ methods{
     getDelegatingVoting(address user) returns (bool) envfree
     getVotingDelegate(address user) returns (address) envfree
     getPropositionDelegate(address user) returns (address) envfree
+
+    getDelegatingState(address user) returns (uint8) envfree
+    getDelegatingState0(address user) returns (uint8) envfree
+    bitOR() returns (uint8) envfree
+    bitXOR() returns (uint8) envfree
 }
 
 /**
@@ -56,7 +61,6 @@ function normalize(uint256 amount) returns uint256 {
     Testing correctness of delegate(). An example of a unit test
 
 */
-
 rule delegateCorrectness(address bob) {
     env e;
     // delegate not to self or to zero
@@ -69,70 +73,18 @@ rule delegateCorrectness(address bob) {
     // verify that the sender doesn't already delegate to bob
     address delegateBefore = getVotingDelegate(e.msg.sender);
     require delegateBefore != bob;
-
     uint256 bobVotingPowerBefore = getPowerCurrent(bob, VOTING_POWER());
     uint256 delegatorBalance = balanceOf(e.msg.sender);
-
     delegate(e, bob);
-
     // test the delegate indeed has changed to bob
     address delegateAfter = getVotingDelegate(e.msg.sender);
     assert delegateAfter == bob;
-
     // test the delegate's new voting power
     uint256 bobVotingPowerAfter = getPowerCurrent(bob, VOTING_POWER());
     assert bobVotingPowerAfter == bobVotingPowerBefore + normalize(delegatorBalance);
 }
 
-/**
-
-    Verify that only delegate functions can change someone's delegate.
-    An example for a parametric rule.
-
-*/
-
-rule votingDelegateChanges(address alice, method f) {
-    env e;
-    calldataarg args;
-
-    address aliceDelegateBefore = getVotingDelegate(alice);
-
-    f(e, args);
-
-    address aliceDelegateAfter = getVotingDelegate(alice);
-
-    // only these four function may change the delegate of an address
-    assert aliceDelegateAfter != aliceDelegateBefore =>
-        f.selector == delegate(address).selector || 
-        f.selector == delegateByType(address,uint8).selector ||
-        f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
-        f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector;
-}
-
-/**
-
-    A ghost variable that tracks the sum of all addresses' balances
-
-*/
-ghost mathint sumBalances {
-    init_state axiom sumBalances == 0;
-}
-
-/**
-
-    This hook updates the sumBalances ghost whenever any address balance is updated
-
-*/
-hook Sstore _balances[KEY address user].balance uint104 balance
-    (uint104 old_balance) STORAGE {
-        sumBalances = sumBalances - to_mathint(old_balance) + to_mathint(balance);
-    }
-
-/**
-
-    Invariant: 
-    sum of all addresses' balances should be always equal to the total supply of the token
-    
-*/
-invariant totalSupplyEqualsBalances()
-    sumBalances == totalSupply()
+invariant isVotingDelegated(address a)
+    getDelegatingVoting(a)==false <=> getVotingDelegate(a) == 0
+    && getDelegatingState(a) >= 0
+    && getDelegatingState0(a) >= 0

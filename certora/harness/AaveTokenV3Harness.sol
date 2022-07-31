@@ -385,11 +385,50 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     _updateDelegateeByType(delegator, delegationType, delegatee);
 
     if (willDelegateAfter != delegatingNow) {
-      _balances[delegator] = _updateDelegationFlagByType(
-        delegatorState,
-        delegationType,
-        willDelegateAfter
-      );
+      if (willDelegateAfter) {
+        // Because GovernancePowerType starts from 0, we should add 1 first, then we apply bitwise OR
+        _balances[delegator].delegationState = DelegationState(
+          uint8(_balances[delegator].delegationState) | (uint8(delegationType) + 1)
+        );
+        {
+        _balances[delegator].delegationState00 = (uint8(1));
+        _balances[delegator].delegationState01 = (uint8(2));
+        _balances[delegator].delegationState02 = (uint8(3));
+        _balances[delegator].delegationState03 = uint8(2 | 1);
+        _balances[delegator].delegationState1 = uint8(delegatorState.delegationState);
+        _balances[delegator].delegationState2 = uint8(uint8(delegationType) + 1);
+        _balances[delegator].delegationState3 = uint8(uint8(delegatorState.delegationState) | uint8(uint8(delegationType) + 1));
+        _balances[delegator].delegationState4 = uint8(uint8(uint8(delegationType) + 1) | uint8(delegatorState.delegationState));
+        }
+      } else {
+        // First bitwise NEGATION, ie was 01, after XOR with 11 will be 10,
+        // then bitwise AND, which means it will keep only another delegation type if it exists
+        _balances[delegator].delegationState = DelegationState(
+          uint8(delegatorState.delegationState) &
+            ((uint8(delegationType) + 1) ^ uint8(DelegationState.FULL_POWER_DELEGATED))
+        );
+        {
+        _balances[delegator].delegationState00 = (uint8(uint8(delegationType) + 1));
+        _balances[delegator].delegationState01 = (uint8(DelegationState.FULL_POWER_DELEGATED));
+        _balances[delegator].delegationState02 = uint8(uint8(uint8(delegationType) + 1) ^ uint8(DelegationState.FULL_POWER_DELEGATED));
+        _balances[delegator].delegationState03 = uint8(1 ^ 3);
+        _balances[delegator].delegationState1 = uint8(delegatorState.delegationState);
+        _balances[delegator].delegationState2 = uint8(uint8(uint8(delegationType) + 1) ^ uint8(DelegationState.FULL_POWER_DELEGATED));
+        _balances[delegator].delegationState3 = uint8(
+            uint8(delegatorState.delegationState) &
+            uint8(uint8(uint8(delegationType) + 1) ^ uint8(DelegationState.FULL_POWER_DELEGATED))
+            );
+        _balances[delegator].delegationState4 = uint8(            
+            uint8(uint8(uint8(delegationType) + 1) ^ uint8(DelegationState.FULL_POWER_DELEGATED))
+            & uint8(delegatorState.delegationState)
+            );
+        }
+      }
+      // _balances[delegator] = _updateDelegationFlagByType(
+      //   delegatorState,
+      //   delegationType,
+      //   willDelegateAfter
+      // );
     }
 
     emit DelegateChanged(delegator, delegatee, delegationType);
@@ -421,6 +460,20 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     return _balances[user].delegatedVotingBalance;
    }
 
+  function getDelegatingState(address user) view public returns (uint8) {
+    return uint8(_balances[user].delegationState00)
+      + uint8(_balances[user].delegationState01)
+      + uint8(_balances[user].delegationState02)
+      + uint8(_balances[user].delegationState03)
+      // + uint8(_balances[user].delegationState04)
+    ;
+  }
+  function getDelegatingState0(address user) view public returns (uint8) {
+    return _balances[user].delegationState1 
+      + _balances[user].delegationState2
+      + _balances[user].delegationState3
+      + _balances[user].delegationState4;
+  }
 
    function getDelegatingProposition(address user) view public returns (bool) {
     return _balances[user].delegationState == DelegationState.PROPOSITION_DELEGATED ||
@@ -441,7 +494,12 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     return _propositionDelegateeV2[user];
    }
 
-
+  function bitOR() pure public returns (uint8) {
+    return 2 | 1;
+  }
+  function bitXOR() pure public returns (uint8) {
+    return 1 ^ 3;
+  }
 
    /**
      End of harness section
