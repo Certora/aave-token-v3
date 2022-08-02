@@ -56,6 +56,7 @@ function normalize(uint256 amount) returns uint256 {
 
 rule metaDelegateWrongDelegator(uint8 type, address ws, address u, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
     env e;
+    require v==27 || v==28;
     storage init = lastStorage;
     if (type==0)
         metaDelegate(e, e.msg.sender, u, deadline, v, r, s);
