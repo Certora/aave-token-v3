@@ -20,6 +20,26 @@ import "./setup.spec"
 **/
 
 /**
+ Helper Functions
+**/
+
+function initializeAddressChecks(address _addr) {
+  uint256 delegatedBalanceVoting = getDelegatedVotingBalance(_addr);
+  uint256 delegatedBalanceProposition = getDelegatedPropositionBalance(_addr);
+  // avoid unrealistic delegated balance
+  require delegatedBalanceVoting < MAX_DELEGATED_BALANCE();
+  require delegatedBalanceProposition < MAX_DELEGATED_BALANCE();
+
+  address delegateVoting = getVotingDelegate(_addr);
+  address delegateProposition = getPropositionDelegate(_addr);
+  // not delegated yet
+  require delegateVoting == 0 && delegateProposition == 0;
+
+  uint256 addrBalance = balanceOf(_addr);
+  require addrBalance > 0;
+}
+
+/**
     Verify that delegate power update when user send token to another user
 */
 rule delegateByTypeCorrectness {
@@ -32,13 +52,8 @@ rule delegateByTypeCorrectness {
   // delegate not to self or to zero
   require alice != e.msg.sender && alice != 0;
 
-  uint256 aliceDelegatedBalance = getDelegatedVotingBalance(alice);
-  // avoid unrealistic delegated balance
-  require(aliceDelegatedBalance < MAX_DELEGATED_BALANCE());
-
-  // verify that the sender doesn't already delegate to alice
-  address delegateBefore = getVotingDelegate(e.msg.sender);
-  require delegateBefore != alice;
+  initializeAddressChecks(e.msg.sender);
+  initializeAddressChecks(alice);
 
   uint256 aliceVotingPowerBefore = getPowerCurrent(alice, VOTING_POWER());
   uint256 alicePropositionPowerBefore = getPowerCurrent(alice, PROPOSITION_POWER());
@@ -72,9 +87,8 @@ rule delegateToZeroOrItselfAddresses {
   // delegate to self or to zero
   require alice == e.msg.sender || alice == 0;
 
-  uint256 aliceDelegatedBalance = getDelegatedVotingBalance(alice);
-  // avoid unrealistic delegated balance
-  require(aliceDelegatedBalance < MAX_DELEGATED_BALANCE());
+  initializeAddressChecks(e.msg.sender);
+  initializeAddressChecks(alice);
 
   uint256 aliceVotingPowerBefore = getPowerCurrent(alice, VOTING_POWER());
   uint256 alicePropositionPowerBefore = getPowerCurrent(alice, PROPOSITION_POWER());
@@ -105,13 +119,9 @@ rule delegateChangeToAnotherAddress {
   require alice != e.msg.sender && alice != 0;
   require bob != e.msg.sender && bob != 0 && bob != alice;
 
-  uint256 aliceDelegatedBalance = getDelegatedVotingBalance(alice);
-  // avoid unrealistic delegated balance
-  require(aliceDelegatedBalance < MAX_DELEGATED_BALANCE());
-
-  // verify that the sender doesn't already delegate to alice
-  address delegateBefore = getVotingDelegate(e.msg.sender);
-  require delegateBefore != alice && delegateBefore != bob;
+  initializeAddressChecks(e.msg.sender);
+  initializeAddressChecks(alice);
+  initializeAddressChecks(bob);
 
   uint256 aliceVotingPowerBefore = getPowerCurrent(alice, VOTING_POWER());
   uint256 alicePropositionPowerBefore = getPowerCurrent(alice, PROPOSITION_POWER());
@@ -158,36 +168,20 @@ rule delegateNotUseDelegatedPower {
   require alice != e.msg.sender && alice != 0;
   require bob != e.msg.sender && bob != 0 && bob != alice;
 
-  uint256 aliceDelegatedBalance = getDelegatedVotingBalance(alice);
-  uint256 bobDelegatedBalance = getDelegatedVotingBalance(bob);
-  // avoid unrealistic delegated balance
-  require(
-    aliceDelegatedBalance < MAX_DELEGATED_BALANCE() &&
-    bobDelegatedBalance < MAX_DELEGATED_BALANCE()
-  );
-
-  // verify that the sender doesn't already delegate to alice
-  address senderDelegateBefore = getVotingDelegate(e.msg.sender);
-  address aliceDelegateBefore = getVotingDelegate(alice);
-  require senderDelegateBefore == 0 && aliceDelegateBefore  == 0;
+  initializeAddressChecks(e.msg.sender);
+  initializeAddressChecks(alice);
+  initializeAddressChecks(bob);
 
   uint256 senderVotingPowerBefore = getPowerCurrent(e.msg.sender, VOTING_POWER());
   uint256 senderPropositionPowerBefore = getPowerCurrent(e.msg.sender, PROPOSITION_POWER());
-  require senderVotingPowerBefore > 0 && senderPropositionPowerBefore > 0;
-
   uint256 aliceVotingPowerBefore = getPowerCurrent(alice, VOTING_POWER());
   uint256 alicePropositionPowerBefore = getPowerCurrent(alice, PROPOSITION_POWER());
-  require aliceVotingPowerBefore > 0 && alicePropositionPowerBefore > 0;
-
   uint256 bobVotingPowerBefore = getPowerCurrent(bob, VOTING_POWER());
   uint256 bobPropositionPowerBefore = getPowerCurrent(bob, PROPOSITION_POWER());
 
-  uint256 delegatorBalance = balanceOf(e.msg.sender);
-  uint256 aliceBalance = balanceOf(alice);
-  require delegatorBalance > 0 && aliceBalance > 0;
-
   //msg.sender delegate power to alice
   delegate(e, alice);
+
   //alice delegate voting power to bob
   metaDelegateByType(e,alice,bob,VOTING_POWER(),deadline,v,r,s);
 
@@ -204,11 +198,14 @@ rule delegateNotUseDelegatedPower {
   address delegateAfterAlice = getVotingDelegate(alice);
   assert delegateAfterAlice == bob, "Alice did not delegate to bob";
 
-  // test the delegate's new voting power
-  assert aliceVotingPowerAfter == aliceVotingPowerBefore => alicePropositionPowerAfter == alicePropositionPowerBefore, "Invalid Alice Power";
+  uint256 senderBalanceNormalized = normalize(balanceOf(e.msg.sender));
+  uint256 aliceBalanceNormalized = normalize(balanceOf(alice));
 
-  assert bobVotingPowerAfter == bobVotingPowerBefore + normalize(aliceBalance) => bobPropositionPowerAfter == bobPropositionPowerBefore, "Invalid Bob Power";
+  // test alice delegate's new voting power
+  assert aliceVotingPowerAfter == aliceVotingPowerBefore + senderBalanceNormalized - aliceBalanceNormalized => alicePropositionPowerAfter == alicePropositionPowerBefore + senderBalanceNormalized, "Invalid Alice Power";
 
+  // test bob delegate's new voting power
+  assert bobVotingPowerAfter == bobVotingPowerBefore + aliceBalanceNormalized => bobPropositionPowerAfter == bobPropositionPowerBefore, "Invalid Bob Power";
 }
 
 
