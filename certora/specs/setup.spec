@@ -22,7 +22,9 @@ methods{
     getDelegatingProposition(address user) returns (bool) envfree
     getDelegatingVoting(address user) returns (bool) envfree
     getVotingDelegate(address user) returns (address) envfree
+    getDelegationState(address a) returns (uint8) envfree
     getPropositionDelegate(address user) returns (address) envfree
+    getNonce(address) returns (uint256) envfree
 }
 
 /**
@@ -50,6 +52,137 @@ definition MAX_DELEGATED_BALANCE() returns uint256 = 16000000 * 10^18 / DELEGATE
 function normalize(uint256 amount) returns uint256 {
     return to_uint256(amount / DELEGATED_POWER_DIVIDER() * DELEGATED_POWER_DIVIDER());
 }
+
+invariant addressZeroNoPower()
+  getPowerCurrent(0, VOTING_POWER()) == 0 && getPowerCurrent(0, PROPOSITION_POWER()) == 0 && balanceOf(0) == 0
+
+rule delegateAnddelegatebytypeComparison {
+  storage initialState = lastStorage;
+  env e;
+  address alice;
+  require alice != e.msg.sender && alice != 0;
+  delegate(e, alice) at initialState;
+  uint256 aliceVotingPowerDelegate = getPowerCurrent(alice, VOTING_POWER());
+  uint256 alicePropositionPowerDelegate = getPowerCurrent(alice, PROPOSITION_POWER());
+  uint72 aliceVotingBalanceDelegate=getDelegatedVotingBalance(alice);
+  uint72 alicePropositionBalanceDelegate=getDelegatedPropositionBalance(alice);
+  delegateByType(e, alice, VOTING_POWER()) at initialState;
+  delegateByType(e, alice, PROPOSITION_POWER());
+  uint256 aliceVotingPowerDelegateByType = getPowerCurrent(alice, VOTING_POWER());
+  uint256 alicePropositionPowerDelegateByType = getPowerCurrent(alice, PROPOSITION_POWER());
+  uint72 aliceVotingBalanceDelegateByType=getDelegatedVotingBalance(alice);
+  uint72 alicePropositionBalanceDelegateByType=getDelegatedPropositionBalance(alice);
+  assert aliceVotingPowerDelegate==aliceVotingPowerDelegateByType;
+  assert alicePropositionPowerDelegate==alicePropositionPowerDelegateByType;
+  assert aliceVotingBalanceDelegate==aliceVotingBalanceDelegateByType;
+  assert alicePropositionBalanceDelegate==alicePropositionBalanceDelegateByType;
+}
+
+rule delegateByTypeCorrectness() {
+    env e;
+    address user;
+    require user != e.msg.sender && user != 0;
+
+    uint256 userDelegatedBalance = getDelegatedVotingBalance(user);    
+    address delegateBefore = getVotingDelegate(e.msg.sender);
+    require delegateBefore != user;
+
+    uint256 userVotingPowerBefore = getPowerCurrent(user, VOTING_POWER());
+    uint256 delegatorBalance = balanceOf(e.msg.sender);
+
+    delegateByType(e, user, VOTING_POWER());
+
+    address delegateAfter = getVotingDelegate(e.msg.sender);
+    assert delegateAfter == user;
+
+    uint256 userVotingPowerAfter = getPowerCurrent(user, VOTING_POWER());
+    assert userVotingPowerAfter == userVotingPowerBefore + normalize(delegatorBalance);
+}
+
+rule metaDelegateCorrectness() {
+    env e;
+    address delegator;
+    address delegatee;
+    uint256 deadline;
+    uint8 v;
+    bytes32 r;
+    bytes32 s;
+    require e.block.timestamp > deadline;
+    metaDelegate@withrevert(e, delegator, delegatee, deadline, v, r, s);
+    assert lastReverted;
+}
+
+rule stateChangeFunctions() {
+  env e;
+  address user;
+  method f;
+  calldataarg args;
+  uint8 stateBefore = getDelegationState(user);
+  f(e, args);
+  uint8 stateAfter = getDelegationState(user);
+  require stateBefore != stateAfter;
+  assert f.selector == delegate(address).selector ||
+  f.selector == delegateByType(address,uint8).selector ||
+  f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
+  f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector;
+}
+
+rule nonceChangeFunctions() {
+  env e;
+  calldataarg args;
+  method f;
+  address sender = e.msg.sender;
+  uint256 nonceBefore = getNonce(sender);
+  f(e, args);
+  uint256 nonceAfter = getNonce(sender);
+  assert nonceBefore != nonceAfter =>
+      f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
+      f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector ||
+      f.selector == permit(address,address,uint256,uint256,uint8,bytes32,bytes32).selector;
+}
+
+rule balanceChangeFunctions() {
+  env e;
+  address alice;
+  calldataarg args;
+  method f;
+  uint256 balanceBefore = balanceOf(alice);
+  f(e, args);
+  uint256 balanceAfter = balanceOf(alice);
+  assert balanceAfter != balanceBefore =>
+    f.selector == transfer(address,uint256).selector ||
+    f.selector == transferFrom(address,address,uint256).selector;
+}
+
+rule delegationIndependentOfEachOther() {
+
+    env e;
+    address alice;
+    address bob;
+
+    storage initialState = lastStorage;
+    address votingDelegateBefore = getVotingDelegate(alice);
+    delegateByType(e, bob, PROPOSITION_POWER());
+    address votingDelegateAfter = getVotingDelegate(alice);
+
+    address propositionDelegateBefore = getPropositionDelegate(alice) at initialState;
+    delegateByType(e, bob, VOTING_POWER());
+    address propositionDelegateAfter = getPropositionDelegate(alice);
+
+    assert votingDelegateBefore == votingDelegateAfter;
+    assert propositionDelegateBefore == propositionDelegateAfter;
+}
+
+rule nonDelegatingAndNotBeignDelegatedUserPowerEqBalance(){
+    address user;
+    require getPropositionDelegate(user) == 0; 
+    require getVotingDelegate(user) == 0;
+    require getDelegatedPropositionBalance(user) == 0;
+    require getDelegatedVotingBalance(user) == 0;
+    require getDelegationState(user) == 0;
+
+    assert getPowerCurrent(user, VOTING_POWER()) == balanceOf(user) && getPowerCurrent(user, PROPOSITION_POWER()) == balanceOf(user);
+} 
 
 /**
 
@@ -128,11 +261,5 @@ hook Sstore _balances[KEY address user].balance uint104 balance
         sumBalances = sumBalances - to_mathint(old_balance) + to_mathint(balance);
     }
 
-/**
-
-    Invariant: 
-    sum of all addresses' balances should be always equal to the total supply of the token
-    
-*/
 invariant totalSupplyEqualsBalances()
     sumBalances == totalSupply()
