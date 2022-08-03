@@ -30,10 +30,10 @@ methods {
 ****************/
 
 /**
-  Function to check if _addr has correct power, not delegated yet
+  Function to check if _addr has delegated power, not delegated yet
   and has balance
 **/
-function initializeAddressChecks(address _addr) {
+function initializeAddressChecks(address _addr) returns bool {
   uint256 delegatedBalanceVoting = getDelegatedVotingBalance(_addr);
   uint256 delegatedBalanceProposition = getDelegatedPropositionBalance(_addr);
   // avoid unrealistic delegated balance
@@ -44,16 +44,19 @@ function initializeAddressChecks(address _addr) {
   address delegateProposition = getPropositionDelegate(_addr);
   // not delegated yet
   require delegateVoting == 0 && delegateProposition == 0;
+  require getNotDelegating(_addr);
 
   uint256 addrBalance = balanceOf(_addr);
   require addrBalance > 0;
+
+  return true;
 }
 
 /**
-  Function to check if _addr has correct power, not delegated yet
+  Function to check if _addr has delegated power, not delegated yet
   and has no balance
 **/
-function initializeAddressChecksWithoutBalance(address _addr) {
+function initializeAddressChecksWithoutBalance(address _addr) returns bool {
   uint256 delegatedBalanceVoting = getDelegatedVotingBalance(_addr);
   uint256 delegatedBalanceProposition = getDelegatedPropositionBalance(_addr);
   // avoid unrealistic delegated balance
@@ -67,6 +70,54 @@ function initializeAddressChecksWithoutBalance(address _addr) {
 
   uint256 addrBalance = balanceOf(_addr);
   require addrBalance == 0;
+
+  return true;
+}
+
+/**
+  Function to check if _addr has no delegated power, not delegated yet
+  and has balance
+**/
+function initializeAddressChecksWithoutDelegatedPower(address _addr) returns bool {
+  uint256 delegatedBalanceVoting = getDelegatedVotingBalance(_addr);
+  uint256 delegatedBalanceProposition = getDelegatedPropositionBalance(_addr);
+  // avoid unrealistic delegated balance
+  require delegatedBalanceVoting == 0;
+  require delegatedBalanceProposition == 0;
+
+  address delegateVoting = getVotingDelegate(_addr);
+  address delegateProposition = getPropositionDelegate(_addr);
+  // not delegated yet
+  require delegateVoting == 0 && delegateProposition == 0;
+  require getNotDelegating(_addr);
+
+  uint256 addrBalance = balanceOf(_addr);
+  require addrBalance > 0;
+
+  return true;
+}
+
+/**
+  Function to check if _addr has delegated power, already delegated power
+  and has balance
+**/
+function initializeAddressChecksWithDelegating(address _addr) returns bool {
+  uint256 delegatedBalanceVoting = getDelegatedVotingBalance(_addr);
+  uint256 delegatedBalanceProposition = getDelegatedPropositionBalance(_addr);
+  // avoid unrealistic delegated balance
+  require delegatedBalanceVoting < MAX_DELEGATED_BALANCE();
+  require delegatedBalanceProposition < MAX_DELEGATED_BALANCE();
+
+  address delegateVoting = getVotingDelegate(_addr);
+  address delegateProposition = getPropositionDelegate(_addr);
+  // not delegated yet
+  require delegateVoting != 0 && delegateProposition != 0;
+  require getFullDelegating(_addr);
+
+  uint256 addrBalance = balanceOf(_addr);
+  require addrBalance > 0;
+
+  return true;
 }
 
 /******
@@ -109,12 +160,18 @@ rule delegateByTypeCorrectness {
     assert votingDelegate == alice, "Did not delegate to alice";
 
     assert aliceVotingPowerAfter == aliceVotingPowerBefore + normalize(delegatorBalance) => alicePropositionPowerAfter == alicePropositionPowerBefore, "Invalid Power";
+
+    // check if state is correctly
+    assert getDelegatingVotingOnly(e.msg.sender), "Invalid state";
   } else {
     // test the delegate indeed has changed to alice
     address propositionDelegate = getPropositionDelegate(e.msg.sender);
     assert propositionDelegate == alice, "Did not delegate to alice";
 
     assert alicePropositionPowerAfter == alicePropositionPowerBefore + normalize(delegatorBalance) => aliceVotingPowerAfter == aliceVotingPowerBefore, "Invalid Power";
+
+    // check if state is correctly
+    assert getDelegatingPropositionOnly(e.msg.sender), "Invalid state";
   }
 }
 
@@ -370,39 +427,238 @@ rule revokeDelegatePower {
 }
 
 /**
-  Verify what functions can change total power
+  Verify if only known functions can change total power
 **/
 rule changeTotalPower {
-    env e;
-    address alice;
-    calldataarg args;
-    method f;
+  env e;
+  address alice;
+  calldataarg args;
+  method f;
 
-    initializeAddressChecks(e.msg.sender);
-    initializeAddressChecks(alice);
+  initializeAddressChecks(e.msg.sender);
+  initializeAddressChecks(alice);
 
-    address delegateVotingBefore = getVotingDelegate(alice);
-    address delegatePropositionBefore = getPropositionDelegate(alice);
+  address delegateVotingBefore = getVotingDelegate(alice);
+  address delegatePropositionBefore = getPropositionDelegate(alice);
 
-    f(e, args);
+  f(e, args);
 
-    address delegateVotingAfter = getVotingDelegate(alice);
-    address delegatePropositionAfter = getPropositionDelegate(alice);
+  address delegateVotingAfter = getVotingDelegate(alice);
+  address delegatePropositionAfter = getPropositionDelegate(alice);
 
-    // only these functions may change the delegate power of an address
-    assert delegateVotingBefore != delegateVotingAfter || delegatePropositionBefore != delegatePropositionAfter =>
-        f.selector == delegate(address).selector ||
-        f.selector == delegateByType(address,uint8).selector ||
-        f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
-        f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector ||
-        f.selector == transfer(address,uint256).selector ||
-        f.selector == transferFrom(address,address,uint256).selector;
+  // only these functions may change the delegate power of an address
+  assert delegateVotingBefore != delegateVotingAfter || delegatePropositionBefore != delegatePropositionAfter =>
+    f.selector == delegate(address).selector ||
+    f.selector == delegateByType(address,uint8).selector ||
+    f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
+    f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector ||
+    f.selector == transfer(address,uint256).selector ||
+    f.selector == transferFrom(address,address,uint256).selector;
+}
+
+/**
+  Verify if transfer balance from a user to
+  other user with no delegated also change the power
+**/
+rule transferPower {
+  env e;
+  address alice;
+  calldataarg args;
+  method f;
+
+  require alice != e.msg.sender;
+
+  initializeAddressChecksWithoutDelegatedPower(e.msg.sender);
+  initializeAddressChecks(alice);
+
+  // get voting and proposition power before
+  uint256 aliceVotingPowerBefore = getPowerCurrent(alice, VOTING_POWER());
+  uint256 alicePropositionPowerBefore = getPowerCurrent(alice, PROPOSITION_POWER());
+
+  uint256 senderBalance = balanceOf(e.msg.sender);
+
+  transfer(e, alice, balanceOf(e.msg.sender));
+
+  // get voting and proposition power before
+  uint256 aliceVotingPowerAfter = getPowerCurrent(alice, VOTING_POWER());
+  uint256 alicePropositionPowerAfter = getPowerCurrent(alice, PROPOSITION_POWER());
+
+  assert aliceVotingPowerAfter == senderBalance + aliceVotingPowerBefore &&
+  alicePropositionPowerAfter == senderBalance + alicePropositionPowerBefore, "Alice power not changed";
+}
+
+/**
+  Verify if transfer balance from a user to other user with delegating power also change the power of delegatee
+**/
+rule transferPowerDelegating {
+  env e;
+  address alice;
+  calldataarg args;
+  method f;
+  uint256 amount;
+
+  require amount <= balanceOf(e.msg.sender) && amount > 0;
+  require alice != e.msg.sender;
+
+  initializeAddressChecksWithoutDelegatedPower(e.msg.sender);
+  initializeAddressChecksWithDelegating(alice);
+
+  // get voting and proposition power before
+  uint256 aliceVotingPowerBefore = getPowerCurrent(alice, VOTING_POWER());
+  uint256 alicePropositionPowerBefore = getPowerCurrent(alice, PROPOSITION_POWER());
+
+  // get voting power of delegating user
+  address delegatingVotingAddr = getVotingDelegate(alice);
+  require alice != delegatingVotingAddr;
+  uint256 delegatingVotingPowerBefore = getDelegatedVotingBalance(delegatingVotingAddr);
+
+  // get prposition power of delegating user
+  address delegatingPropositionAddr = getPropositionDelegate(alice);
+  require alice != delegatingPropositionAddr;
+  uint256 delegatingPropositionPowerBefore = getDelegatedPropositionBalance(delegatingPropositionAddr);
+
+  uint256 aliceBalanceBefore = balanceOf(alice);
+
+  transfer(e,alice, amount);
+
+  // get voting and proposition power before
+  uint256 aliceVotingPowerAfter = getPowerCurrent(alice, VOTING_POWER());
+  uint256 alicePropositionPowerAfter = getPowerCurrent(alice, PROPOSITION_POWER());
+
+  assert aliceVotingPowerAfter == aliceVotingPowerBefore &&
+  alicePropositionPowerAfter == alicePropositionPowerBefore, "Alice power changed";
+
+  uint256 delegatingVotingPowerAfter = getDelegatedVotingBalance(delegatingVotingAddr);
+  uint256 delegatingPropositionPowerAfter = getDelegatedPropositionBalance(delegatingPropositionAddr);
+
+  uint256 aliceBalanceAfter = balanceOf(alice);
+
+  //Check if power updated correctly
+  assert delegatingVotingPowerAfter == delegatingVotingPowerBefore - aliceBalanceBefore/DELEGATED_POWER_DIVIDER() + aliceBalanceAfter/DELEGATED_POWER_DIVIDER(), "Not changed delegating voting power";
+  assert delegatingPropositionPowerAfter == delegatingPropositionPowerBefore - aliceBalanceBefore/DELEGATED_POWER_DIVIDER() + aliceBalanceAfter/DELEGATED_POWER_DIVIDER(), "Not changed delegating proposition power";
+}
+
+/**
+  Verify if transfer balance from msg.sender with delegating power to
+  alice not delegating power, revoke delegating power of msg.sender
+**/
+rule transferPowerRevoking {
+  env e;
+  address alice;
+  calldataarg args;
+  method f;
+  uint256 amount;
+
+  require amount <= balanceOf(e.msg.sender) && amount > 0;
+  require alice != e.msg.sender;
+
+  initializeAddressChecksWithDelegating(e.msg.sender);
+  initializeAddressChecksWithoutDelegatedPower(alice);
+
+  // get voting and proposition power before
+  uint256 senderVotingPowerBefore = getPowerCurrent(e.msg.sender, VOTING_POWER());
+  uint256 senderPropositionPowerBefore = getPowerCurrent(e.msg.sender, PROPOSITION_POWER());
+
+  // get voting power of delegating user
+  address delegatingVotingAddr = getVotingDelegate(e.msg.sender);
+  require e.msg.sender != delegatingVotingAddr;
+  uint256 delegatingVotingPowerBefore = getDelegatedVotingBalance(delegatingVotingAddr);
+
+  // get prposition power of delegating user
+  address delegatingPropositionAddr = getPropositionDelegate(e.msg.sender);
+  require e.msg.sender != delegatingPropositionAddr;
+  uint256 delegatingPropositionPowerBefore = getDelegatedPropositionBalance(delegatingPropositionAddr);
+
+  uint256 senderBalanceBefore = balanceOf(e.msg.sender);
+
+  transfer(e,alice, amount);
+
+  // get voting and proposition power before
+  uint256 senderVotingPowerAfter = getPowerCurrent(e.msg.sender, VOTING_POWER());
+  uint256 senderPropositionPowerAfter = getPowerCurrent(e.msg.sender, PROPOSITION_POWER());
+
+  uint256 delegatingVotingPowerAfter = getDelegatedVotingBalance(delegatingVotingAddr);
+  uint256 delegatingPropositionPowerAfter = getDelegatedPropositionBalance(delegatingPropositionAddr);
+
+  uint256 senderBalanceAfter = balanceOf(e.msg.sender);
+
+  //Check if power updated correctly
+  assert delegatingVotingPowerAfter == delegatingVotingPowerBefore - senderBalanceBefore/DELEGATED_POWER_DIVIDER() + senderBalanceAfter/DELEGATED_POWER_DIVIDER(), "Not changed delegating voting power";
+  assert delegatingPropositionPowerAfter == delegatingPropositionPowerBefore - senderBalanceBefore/DELEGATED_POWER_DIVIDER() + senderBalanceAfter/DELEGATED_POWER_DIVIDER(), "Not changed delegating proposition power";
+}
+
+
+/**
+  Verify if only known functions can change balance of user
+**/
+rule changeBalanceOfUser {
+  env e;
+  address alice;
+  calldataarg args;
+  method f;
+
+  initializeAddressChecks(e.msg.sender);
+  initializeAddressChecks(alice);
+
+  uint256 balanceBefore = balanceOf(alice);
+
+  f(e, args);
+
+  uint256 balanceAfter = balanceOf(alice);
+
+  // only these functions may change the delegate power of an address
+  assert balanceAfter != balanceBefore =>
+    f.selector == transfer(address,uint256).selector ||
+    f.selector == transferFrom(address,address,uint256).selector;
+}
+
+/*************
+GHOSTS & HOOKS
+*************/
+
+/**
+  A ghost variable that tracks the sum of all delegatedPropositionBalance
+*/
+ghost mathint sumDelegatedPropositionBalance {
+    init_state axiom sumDelegatedPropositionBalance == 0;
+}
+
+/**
+  A ghost variable that tracks the sum of all delegatedVotingBalance
+*/
+ghost mathint sumDelegatedVotingBalance {
+    init_state axiom sumDelegatedVotingBalance == 0;
+}
+
+/**
+  This hook updates the sumDelegatedPropositionBalance ghost whenever any
+  address delegatedPropositionBalance is updated
+*/
+hook Sstore _balances[KEY address user].delegatedPropositionBalance uint72 balance
+(uint72 old_balance) STORAGE {
+  sumBalances = sumBalances - to_mathint(old_balance) + to_mathint(balance);
+}
+
+/**
+  This hook updates the sumDelegatedVotingBalance ghost whenever any
+  address delegatedVotingBalance is updated
+*/
+hook Sstore _balances[KEY address user].delegatedVotingBalance uint72 balance
+(uint72 old_balance) STORAGE {
+  sumBalances = sumBalances - to_mathint(old_balance) + to_mathint(balance);
 }
 
 
 /**********
  Invariants
 **********/
+
+/**
+  Verify if address delegated proposition and voting balance is bellow total supply
+**/
+invariant totalDelegatedBalance()
+  sumDelegatedPropositionBalance <= totalSupply() &&
+  sumDelegatedVotingBalance <= totalSupply()
 
 /**
   Verify if address zero has zero power
@@ -415,9 +671,9 @@ invariant addressZeroPower()
 /**
   Verify if voting/proposition power is calculated correctly
   considering the state change during the execution
-  ps: it's "heavy" to run because of verifications
+  ps: it's "heavy" to run because of multiple verifications
 **/
-invariant checkVotingPropositionPower(address alice)
+invariant checkVotingAndPropositionPower(address alice)
   //If alice is delegating only voting
   //power of voting = delegated voting
   //power of proposition = balance + delegated proposition
