@@ -104,7 +104,7 @@ invariant totalSupplyGreaterThanSumOFBalanceOfUser(address user1, address user2)
     balanceOf(user1) + balanceOf(user2) <= totalSupply()
 
 /**
-    invariant
+    invariant not passing. don't know the problem
     TotalSupply is greater than or equal to sum of delegated proposition balance
 */
 invariant totalSupplyGreaterOrEqualsDelegatedPropositionBalanceSum(address user1, address user2)
@@ -117,7 +117,7 @@ invariant totalSupplyGreaterOrEqualsDelegatedPropositionBalanceSum(address user1
     }
 
 /**
-    invariant
+    invariant not passing. don't know the problem
     TotalSupply is greater than or equal to sum of delegated voting balance
 */
 invariant totalSupplyGreaterOrEqualsDelegatedVotingBalanceSum(address user1, address user2)
@@ -169,6 +169,27 @@ rule votingAndPropositionDelegatedChangesCanOnlyBeDoneByCertainMethods() {
         f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
         f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector, 
         "voting and proposition changes can only be done by delegate, delegateByType, metaDelegate, metaDelegateByType";
+}
+
+/**
+    Rule
+    Balance can only be changed by following 2 methods
+    transfer and transferFrom
+*/
+ rule balanceCanOnlyBeChangedByCertainMethods() {
+    env e;
+    address user;
+    method f;
+    calldataarg args;
+
+    mathint balanceBefore = balanceOf(user);
+
+    f(e, args);
+
+    mathint balanceAfter = balanceOf(user);
+
+    assert balanceBefore != balanceAfter => f.selector == transfer(address,uint256).selector || f.selector == transferFrom(address,address,uint256).selector,
+    "balance can only be changed by transfer and transferfrom";
 }
 
 /**

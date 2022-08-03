@@ -9,5 +9,5 @@ certoraRun certora/harness/AaveTokenV3Harness.sol:AaveTokenV3 \
     --optimistic_loop \
     --send_only \
     --cloud \
-    # --rule "stateChangeOfDelegation" \
+    # --rule "equivalenceOfDelegateAndDelegateByType" \
     --msg "AaveTokenV3:setup.spec $1"
