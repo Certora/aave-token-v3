@@ -438,12 +438,26 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
      return _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
    }
 
+   function getDelegationState(address user) view public returns (uint8) {
+     return uint8(_balances[user].delegationState);
+   }
+
+
+
    function getVotingDelegate(address user) view public returns (address) {
     return _votingDelegateeV2[user];
    }
 
    function getPropositionDelegate(address user) view public returns (address) {
     return _propositionDelegateeV2[user];
+   }
+
+   function getAllowance(address owner, address spender) view public returns (uint256) {
+      return _allowances[owner][spender];
+   }
+
+   function getNonce(address user) view public returns (uint256) {
+      return _nonces[user];
    }
 
   //Function that works correctly updating flag type

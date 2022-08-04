@@ -25,6 +25,9 @@ methods {
   getDelegatingPropositionOnly(address user) returns (bool) envfree
   getDelegatingVotingOnly(address user) returns (bool) envfree
   getFullDelegating(address user) returns (bool) envfree
+  getDelegationState(address user) returns (uint8) envfree
+  getAllowance(address _owner, address _spender) returns (uint256) envfree
+  getNonce(address user) returns (uint256) envfree
 }
 
 /****************
@@ -428,7 +431,7 @@ rule revokeDelegatePower {
 /**
   Verify if only known functions can change total power
 **/
-rule changeTotalPower {
+rule changeTotalPowerFunctions {
   env e;
   address alice;
   calldataarg args;
@@ -590,7 +593,7 @@ rule transferPowerRevoking {
 /**
   Verify if only known functions can change balance of user
 **/
-rule changeBalanceOfUser {
+rule changeBalanceOfUserFunctions {
   env e;
   address alice;
   calldataarg args;
@@ -609,6 +612,75 @@ rule changeBalanceOfUser {
   assert balanceAfter != balanceBefore =>
     f.selector == transfer(address,uint256).selector ||
     f.selector == transferFrom(address,address,uint256).selector;
+}
+
+/**
+  Verify if nonce and allowance are updated correctly
+**/
+rule checkPermitCorrectness {
+  env e;
+  address alice;
+  uint256 amount;
+  uint256 deadline;
+  uint8 v;
+  bytes32 r;
+  bytes32 s;
+
+  //get nonce of sender and avoid unrealistic nonce
+  uint256 nonceBefore = getNonce(e.msg.sender);
+  require nonceBefore < MAX_DELEGATED_BALANCE();
+
+  permit(e, e.msg.sender, alice, amount, deadline, v, r, s);
+
+  mathint nonceAfter = getNonce(e.msg.sender);
+  uint256 aliceAllowanceAfter = getAllowance(e.msg.sender, alice);
+
+  assert aliceAllowanceAfter == amount, "allowance is not amount";
+  assert nonceAfter == nonceBefore + 1, "invalid nonce";
+}
+
+/**
+  Verify if only known functions can change nonce
+**/
+rule changeNonceFunctions {
+  env e;
+  calldataarg args;
+  method f;
+
+  uint256 nonceBefore = getNonce(e.msg.sender);
+
+  f(e, args);
+
+  uint256 nonceAfter = getNonce(e.msg.sender);
+
+  assert nonceBefore != nonceAfter =>
+      f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
+      f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector ||
+      f.selector == permit(address,address,uint256,uint256,uint8,bytes32,bytes32).selector,
+      "function is not allowed to change permit";
+}
+
+/**
+  Verify if only known functions can change state
+**/
+rule changeStateFunctions {
+  env e;
+  address user;
+  method f;
+  calldataarg args;
+
+  uint8 delegationStateBefore = getDelegationState(user);
+
+  f(e, args);
+
+  uint8 delegationStateAfter = getDelegationState(user);
+
+  require delegationStateBefore != delegationStateAfter;
+
+  assert f.selector == delegate(address).selector ||
+  f.selector == delegateByType(address,uint8).selector ||
+  f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
+  f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector;
 }
 
 /*************
@@ -664,7 +736,8 @@ invariant totalDelegatedBalance()
 **/
 invariant addressZeroPower()
   getPowerCurrent(0, VOTING_POWER()) == 0 &&
-  getPowerCurrent(0, PROPOSITION_POWER()) == 0
+  getPowerCurrent(0, PROPOSITION_POWER()) == 0 &&
+  balanceOf(0) == 0
   { preserved with (env e) { require e.msg.sender != 0; } }
 
 /**
