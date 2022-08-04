@@ -7,7 +7,7 @@ import "./setup.spec"
     transfer(address to, uint256 amount) returns (bool)
     transferFrom(address from, address to, uint256 amount) returns (bool)
     delegate(address delegatee)
-    metaDelegate(address, address, uint256, uint8, bytes32, bytes32)
+    metaDelegate(address delegator, address delegatee, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
     getPowerCurrent(address user, uint8 delegationType) returns (uint256) envfree
     getBalance(address user) returns (uint104) envfree
     getDelegatedPropositionBalance(address user) returns (uint72) envfree
@@ -19,6 +19,8 @@ import "./setup.spec"
   }
 **/
 methods {
+  delegateByType(address delegatee, uint8 delegationType)
+  metaDelegateByType(address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
   getNotDelegating(address user) returns (bool) envfree
   getDelegatingPropositionOnly(address user) returns (bool) envfree
   getDelegatingVotingOnly(address user) returns (bool) envfree
@@ -40,14 +42,14 @@ function initializeAddressChecks(address _addr) returns bool {
   require delegatedBalanceVoting < MAX_DELEGATED_BALANCE();
   require delegatedBalanceProposition < MAX_DELEGATED_BALANCE();
 
-  address delegateVoting = getVotingDelegate(_addr);
-  address delegateProposition = getPropositionDelegate(_addr);
+  address delegateVotingAddr = getVotingDelegate(_addr);
+  address delegatePropositionAddr = getPropositionDelegate(_addr);
   // not delegated yet
-  require delegateVoting == 0 && delegateProposition == 0;
+  require delegateVotingAddr == 0 && delegatePropositionAddr == 0;
   require getNotDelegating(_addr);
 
   uint256 addrBalance = balanceOf(_addr);
-  require addrBalance > 0;
+  require addrBalance > 0 && addrBalance < MAX_DELEGATED_BALANCE();
 
   return true;
 }
@@ -295,7 +297,7 @@ rule delegateNotUseDelegatedPower {
   delegate(e, alice);
 
   //alice delegate voting power to bob
-  metaDelegateByType(e,alice,bob,VOTING_POWER(),deadline,v,r,s);
+  metaDelegate(e,alice,bob,deadline,v,r,s);
 
   //get new voting and proposition power
   uint256 aliceVotingPowerAfter = getPowerCurrent(alice, VOTING_POWER());
@@ -311,13 +313,13 @@ rule delegateNotUseDelegatedPower {
   assert aliceVotingDelegate == bob, "Alice did not delegate to bob";
 
   uint256 senderBalanceNormalized = normalize(balanceOf(e.msg.sender));
-  uint256 aliceBalanceNormalized = normalize(balanceOf(alice));
+  uint256 aliceBalanceNormalized = balanceOf(alice);
 
   // test alice new power
-  assert aliceVotingPowerAfter == aliceVotingPowerBefore + senderBalanceNormalized - aliceBalanceNormalized => alicePropositionPowerAfter == alicePropositionPowerBefore + senderBalanceNormalized, "Invalid Alice Power";
+  assert aliceVotingPowerAfter == aliceVotingPowerBefore + senderBalanceNormalized - balanceOf(alice) => alicePropositionPowerAfter == alicePropositionPowerBefore + senderBalanceNormalized - balanceOf(alice), "Invalid Alice Power";
 
   // test bob new power
-  assert bobVotingPowerAfter == bobVotingPowerBefore + aliceBalanceNormalized => bobPropositionPowerAfter == bobPropositionPowerBefore, "Invalid Bob Power";
+  assert bobVotingPowerAfter == bobVotingPowerBefore + aliceBalanceNormalized => bobPropositionPowerAfter == bobPropositionPowerBefore + aliceBalanceNormalized, "Invalid Bob Power";
 }
 
 /**
@@ -325,7 +327,7 @@ rule delegateNotUseDelegatedPower {
   not change the state and
   change voting/proposition delegatee
 **/
-rule delegateZeroBalanceNotChangeState {
+rule delegateZeroBalance {
   env e;
   address alice;
 
@@ -355,9 +357,6 @@ rule delegateZeroBalanceNotChangeState {
 
   // check if alice power not changed (balance==0)
   assert aliceVotingPowerAfter == aliceVotingPowerBefore => alicePropositionPowerAfter == alicePropositionPowerBefore, "Invalid Alice Power";
-
-  //the state of delegation shouldn't change
-  assert getNotDelegating(e.msg.sender);
 }
 
 /**
