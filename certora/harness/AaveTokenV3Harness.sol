@@ -116,6 +116,25 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     _delegateByType(delegator, delegatee, delegationType);
   }
 
+  function verifyMetaDelegateSignature(
+    address delegator,
+    address delegatee,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+  ) public view returns (bool) {
+    uint256 currentValidNonce = _nonces[delegator];
+    bytes32 digest = keccak256(
+      abi.encodePacked(
+        '\x19\x01',
+        DOMAIN_SEPARATOR,
+        keccak256(abi.encode(DELEGATE_TYPEHASH, delegator, delegatee, currentValidNonce, deadline))
+      )
+    );
+    return delegator == ecrecover(digest, v, r, s);
+  }
+
   /// @inheritdoc IGovernancePowerDelegationToken
   function metaDelegate(
     address delegator,
@@ -165,7 +184,8 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     uint104 impactOnDelegationAfter,
     address delegatee,
     GovernancePowerType delegationType
-  ) public { // public instead of internal for testing a particular condition in this function
+  ) internal {
+    // public instead of internal for testing a particular condition in this function
     if (delegatee == address(0)) return;
     if (impactOnDelegationBefore == impactOnDelegationAfter) return;
 
@@ -173,14 +193,10 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     uint72 impactOnDelegationBefore72 = uint72(impactOnDelegationBefore / POWER_SCALE_FACTOR);
     uint72 impactOnDelegationAfter72 = uint72(impactOnDelegationAfter / POWER_SCALE_FACTOR);
 
-    bool testCondition = (delegationType == GovernancePowerType.VOTING
-            &&
-            _balances[delegatee].delegatedVotingBalance < impactOnDelegationBefore72)
-            || (
-            delegationType == GovernancePowerType.PROPOSITION
-            &&
-            _balances[delegatee].delegatedPropositionBalance < impactOnDelegationBefore72
-            );
+    bool testCondition = (delegationType == GovernancePowerType.VOTING &&
+      _balances[delegatee].delegatedVotingBalance < impactOnDelegationBefore72) ||
+      (delegationType == GovernancePowerType.PROPOSITION &&
+        _balances[delegatee].delegatedPropositionBalance < impactOnDelegationBefore72);
     require(!testCondition);
 
     if (delegationType == GovernancePowerType.VOTING) {
@@ -399,51 +415,76 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     Harness section - replace struct reads and writes with function calls
    */
 
-//   struct DelegationAwareBalance {
-//     uint104 balance;
-//     uint72 delegatedPropositionBalance;
-//     uint72 delegatedVotingBalance;
-//     bool delegatingProposition;
-//     bool delegatingVoting;
-//   }
+  //   struct DelegationAwareBalance {
+  //     uint104 balance;
+  //     uint72 delegatedPropositionBalance;
+  //     uint72 delegatedVotingBalance;
+  //     bool delegatingProposition;
+  //     bool delegatingVoting;
+  //   }
 
-
-   function getBalance(address user) view public returns (uint104) {
+  function getBalance(address user) public view returns (uint104) {
     return _balances[user].balance;
-   }
+  }
 
-   function getDelegatedPropositionBalance(address user) view public returns (uint72) {
+  function getDelegatedPropositionBalance(address user) public view returns (uint72) {
     return _balances[user].delegatedPropositionBalance;
-   }
+  }
 
-
-   function getDelegatedVotingBalance(address user) view public returns (uint72) {
+  function getDelegatedVotingBalance(address user) public view returns (uint72) {
     return _balances[user].delegatedVotingBalance;
-   }
+  }
 
+  function getDelegationState(address user) public view returns (DelegationState) {
+    return _balances[user].delegationState;
+  }
 
-   function getDelegatingProposition(address user) view public returns (bool) {
-    return _balances[user].delegationState == DelegationState.PROPOSITION_DELEGATED ||
-        _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
-   }
+  function getDelegatingProposition(address user) public view returns (bool) {
+    return
+      _balances[user].delegationState == DelegationState.PROPOSITION_DELEGATED ||
+      _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
+  }
 
+  function getDelegatingVoting(address user) public view returns (bool) {
+    return
+      _balances[user].delegationState == DelegationState.VOTING_DELEGATED ||
+      _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
+  }
 
-   function getDelegatingVoting(address user) view public returns (bool) {
-     return _balances[user].delegationState == DelegationState.VOTING_DELEGATED ||
-        _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
-   }
-
-   function getVotingDelegate(address user) view public returns (address) {
+  function getVotingDelegate(address user) public view returns (address) {
     return _votingDelegateeV2[user];
-   }
+  }
 
-   function getPropositionDelegate(address user) view public returns (address) {
+  function getPropositionDelegate(address user) public view returns (address) {
     return _propositionDelegateeV2[user];
-   }
+  }
 
+  function ecrecover_wrapper(
+    bytes32 hash,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+  ) public pure returns (address) {
+    return ecrecover(hash, v, r, s);
+  }
 
+  function computeMetaDelegateHash(
+    address delegator,
+    address delegatee,
+    uint256 deadline,
+    uint256 nonce
+  ) public view returns (bytes32) {
+    bytes32 digest = keccak256(
+      abi.encodePacked(
+        '\x19\x01',
+        DOMAIN_SEPARATOR,
+        keccak256(abi.encode(DELEGATE_TYPEHASH, delegator, delegatee, nonce, deadline))
+      )
+    );
+    return digest;
+  }
 
-   /**
+  /**
      End of harness section
     */
 }
