@@ -252,13 +252,30 @@ rule delegateByBothTypesSameAsDelegate(env e1, env e2, env e3, address delegatee
         addressUserStateD == addressUserStateMD;
 }
 
+function assumeDelegatedVotingBalanceDoesNotExceedBalance(address delegator) {
+    address delegatee = getVotingDelegate(delegator);
+    require delegatee != 0 => getDelegatedVotingBalance(delegatee) >= getBalance(delegator) / DELEGATED_POWER_DIVIDER() ;
+}
+
+function assumeDelegatedPropositionBalanceDoesNotExceedBalance(address delegator) {
+    address delegatee = getPropositionDelegate(delegator);
+    require delegatee != 0 => getDelegatedPropositionBalance(delegatee) >= getBalance(delegator) / DELEGATED_POWER_DIVIDER();
+}
+
 rule delegationToZeroReclaimsFullPower(env e) {
+    assumeDelegatedVotingBalanceDoesNotExceedBalance(e.msg.sender);
+    assumeDelegatedPropositionBalanceDoesNotExceedBalance(e.msg.sender);
+    requireInvariant delegatingVotingIffVotingDelegateIsNonZero(e.msg.sender);
+    requireInvariant delegatingPropositionIffPropositionDelegateIsNonZero(e.msg.sender);
+    requireInvariant delegationStateFlagIsLessThan4(e.msg.sender);
     delegate(e, 0);
-    assert getVotingDelegate(e.msg.sender) == e.msg.sender &&
-        getPropositionDelegate(e.msg.sender) == e.msg.sender;
+    assert getVotingDelegate(e.msg.sender) == 0 &&
+        getPropositionDelegate(e.msg.sender) == 0;
 }
 
 rule delegationToZeroAlwaysPossible(env e) {
+    assumeDelegatedVotingBalanceDoesNotExceedBalance(e.msg.sender);
+    assumeDelegatedPropositionBalanceDoesNotExceedBalance(e.msg.sender);    
     requireInvariant delegationStateFlagIsLessThan4(e.msg.sender);
     require e.msg.value == 0;
     delegate@withrevert(e, 0);
@@ -307,12 +324,3 @@ invariant delegatingPropositionIffPropositionDelegateIsNonZero(address addr)
 
 invariant delegationStateFlagIsLessThan4(address addr)
     getDelegationState(addr) < 4
-
-invariant delegatedVotingBalanceOfDelegateeGreaterThanDelegatorBalanceLemma(address delegator1, address delegator2, address delegatee)
-    (delegatee != 0 && getVotingDelegate(delegator1) == delegatee && getVotingDelegate(delegator2) == delegatee) =>
-    getDelegatedVotingBalance(delegatee) * DELEGATED_POWER_DIVIDER() >= getBalance(delegator1) + getBalance(delegator2) {
-        preserved {
-            requireInvariant delegatingVotingIffVotingDelegateIsNonZero(delegator1);
-            requireInvariant delegatingVotingIffVotingDelegateIsNonZero(delegator2);
-        }
-    }
