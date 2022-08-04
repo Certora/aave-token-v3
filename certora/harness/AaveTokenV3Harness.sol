@@ -116,25 +116,6 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     _delegateByType(delegator, delegatee, delegationType);
   }
 
-  function verifyMetaDelegateSignature(
-    address delegator,
-    address delegatee,
-    uint256 deadline,
-    uint8 v,
-    bytes32 r,
-    bytes32 s
-  ) public view returns (bool) {
-    uint256 currentValidNonce = _nonces[delegator];
-    bytes32 digest = keccak256(
-      abi.encodePacked(
-        '\x19\x01',
-        DOMAIN_SEPARATOR,
-        keccak256(abi.encode(DELEGATE_TYPEHASH, delegator, delegatee, currentValidNonce, deadline))
-      )
-    );
-    return delegator == ecrecover(digest, v, r, s);
-  }
-
   /// @inheritdoc IGovernancePowerDelegationToken
   function metaDelegate(
     address delegator,
@@ -193,10 +174,14 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     uint72 impactOnDelegationBefore72 = uint72(impactOnDelegationBefore / POWER_SCALE_FACTOR);
     uint72 impactOnDelegationAfter72 = uint72(impactOnDelegationAfter / POWER_SCALE_FACTOR);
 
-    bool testCondition = (delegationType == GovernancePowerType.VOTING &&
-      _balances[delegatee].delegatedVotingBalance < impactOnDelegationBefore72) ||
-      (delegationType == GovernancePowerType.PROPOSITION &&
-        _balances[delegatee].delegatedPropositionBalance < impactOnDelegationBefore72);
+    bool testCondition = (delegationType == GovernancePowerType.VOTING
+            &&
+            _balances[delegatee].delegatedVotingBalance < impactOnDelegationBefore72)
+            || (
+            delegationType == GovernancePowerType.PROPOSITION
+            &&
+            _balances[delegatee].delegatedPropositionBalance < impactOnDelegationBefore72
+            );
     require(!testCondition);
 
     if (delegationType == GovernancePowerType.VOTING) {

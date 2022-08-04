@@ -158,6 +158,37 @@ rule votingDelegateChanges(address alice, method f) {
         f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector;
 }
 
+/**
+
+    A ghost variable that tracks the sum of all addresses' balances
+
+*/
+ghost mathint sumBalances {
+    init_state axiom sumBalances == 0;
+}
+
+
+/**
+
+    This hook updates the sumBalances ghost whenever any address balance is updated
+
+*/
+hook Sstore _balances[KEY address user].balance uint104 balance
+    (uint104 old_balance) STORAGE {
+        sumBalances = sumBalances - to_mathint(old_balance) + to_mathint(balance);
+    }
+
+/**
+
+    Invariant: 
+    sum of all addresses' balances should be always equal to the total supply of the token
+    
+*/
+invariant totalSupplyEqualsBalances()
+    sumBalances == totalSupply()
+
+
+
 rule metaDelegateOnlyCallableWithProperlySignedArguments(env e, address delegator, address delegatee, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
     require ecrecover_wrapper(computeMetaDelegateHash(delegator, delegatee, deadline, _nonces(delegator)), v, r, s) != delegator;
     metaDelegate@withrevert(e, delegator, delegatee, deadline, v, r, s);
@@ -221,19 +252,14 @@ rule delegateByBothTypesSameAsDelegate(env e1, env e2, env e3, address delegatee
         addressUserStateD == addressUserStateMD;
 }
 
-// rule delegationToZeroReclaimsFullPower(env e) {
-//     delegate(e, 0);
-//     assert getVotingDelegate(e.msg.sender) == e.msg.sender &&
-//         getPropositionDelegate(e.msg.sender) == e.msg.sender;
-// }
+rule delegationToZeroReclaimsFullPower(env e) {
+    delegate(e, 0);
+    assert getVotingDelegate(e.msg.sender) == e.msg.sender &&
+        getPropositionDelegate(e.msg.sender) == e.msg.sender;
+}
 
 rule delegationToZeroAlwaysPossible(env e) {
     requireInvariant delegationStateFlagIsLessThan4(e.msg.sender);
-    //TODO prove it
-    require getVotingDelegate(e.msg.sender) != 0 =>
-        getDelegatedVotingBalance(getVotingDelegate(e.msg.sender)) >= balanceOf(e.msg.sender) / DELEGATED_POWER_DIVIDER();
-    require getPropositionDelegate(e.msg.sender) != 0 =>
-        getDelegatedPropositionBalance(getPropositionDelegate(e.msg.sender)) >= balanceOf(e.msg.sender) / DELEGATED_POWER_DIVIDER();
     require e.msg.value == 0;
     delegate@withrevert(e, 0);
     assert !lastReverted;
@@ -253,36 +279,6 @@ rule onlyPropositionPowerSourcesAreBalanceAndDelegation(address addr) {
     assert getPowerCurrent(addr, PROPOSITION_POWER()) ==
         getPropositionBalance(addr) + getScaledDelegatedPropositionPower(addr);
 }
-
-/**
-
-    A ghost variable that tracks the sum of all addresses' balances
-
-*/
-ghost mathint sumBalances {
-    init_state axiom sumBalances == 0;
-}
-
-
-/**
-
-    This hook updates the sumBalances ghost whenever any address balance is updated
-
-*/
-hook Sstore _balances[KEY address user].balance uint104 balance
-    (uint104 old_balance) STORAGE {
-        sumBalances = sumBalances - to_mathint(old_balance) + to_mathint(balance);
-    }
-
-/**
-
-    Invariant: 
-    sum of all addresses' balances should be always equal to the total supply of the token
-    
-*/
-invariant totalSupplyEqualsBalances()
-    sumBalances == totalSupply()
-
 invariant nullAddressZeroBalance()
     balanceOf(0) == 0
 
@@ -313,12 +309,10 @@ invariant delegationStateFlagIsLessThan4(address addr)
     getDelegationState(addr) < 4
 
 invariant delegatedVotingBalanceOfDelegateeGreaterThanDelegatorBalanceLemma(address delegator1, address delegator2, address delegatee)
-    getDelegatedVotingBalance(delegatee) >= getBalance(delegator1) / DELEGATED_POWER_DIVIDER() + getBalance(delegator2) / DELEGATED_POWER_DIVIDER() {
+    (delegatee != 0 && getVotingDelegate(delegator1) == delegatee && getVotingDelegate(delegator2) == delegatee) =>
+    getDelegatedVotingBalance(delegatee) * DELEGATED_POWER_DIVIDER() >= getBalance(delegator1) + getBalance(delegator2) {
         preserved {
             requireInvariant delegatingVotingIffVotingDelegateIsNonZero(delegator1);
             requireInvariant delegatingVotingIffVotingDelegateIsNonZero(delegator2);
-            require delegatee != 0;
-            require getVotingDelegate(delegator1) == delegatee;
-            require getVotingDelegate(delegator2) == delegatee;
         }
     }
