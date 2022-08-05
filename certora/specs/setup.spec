@@ -109,6 +109,105 @@ rule votingDelegateChanges(address alice, method f) {
         f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector;
 }
 
+rule propositionDelegateChanges(address alice, method f) {
+    env e;
+    calldataarg args;
+
+    address aliceDelegateBefore = getPropositionDelegate(alice);
+
+    f(e, args);
+
+    address aliceDelegateAfter = getPropositionDelegate(alice);
+
+    // only these four function may change the delegate of an address
+    assert aliceDelegateAfter != aliceDelegateBefore =>
+        f.selector == delegate(address).selector || 
+        f.selector == delegateByType(address,uint8).selector ||
+        f.selector == metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector ||
+        f.selector == metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector;
+}
+
+rule powerChanges(address alice, method f) {
+    env e;
+    calldataarg args;
+
+    uint8 type;
+    require type <= 1;
+    uint256 powerBefore = getPowerCurrent(alice, type);
+
+    f(e, args);
+
+    uint256 powerAfter = getPowerCurrent(alice, type);
+
+    assert powerBefore != powerAfter =>
+        f.selector == delegate(address).selector ||
+        f.selector == delegateByType(address, uint8).selector ||
+        f.selector == metaDelegate(address, address, uint256, uint8, bytes32, bytes32).selector ||
+        f.selector == metaDelegateByType(address, address, uint8, uint256, uint8, bytes32, bytes32).selector ||
+        f.selector == transfer(address, uint256).selector ||
+        f.selector == transferFrom(address, address, uint256).selector ||
+        // For some reason this function is public
+        f.selector == _governancePowerTransferByType(uint104, uint104, address, uint8).selector;
+}
+
+rule delegateIndependence(method f) {
+    env e;
+
+    uint8 type;
+    require type <= 1;
+
+    address delegateBefore = type == 1 ? getPropositionDelegate(e.msg.sender) : getVotingDelegate(e.msg.sender);
+
+    delegateByType(e, _, 1 - type);
+
+    address delegateAfter = type == 1 ? getPropositionDelegate(e.msg.sender) : getVotingDelegate(e.msg.sender);
+
+    assert delegateBefore == delegateAfter;
+}
+
+rule metaDelegateIndependence(method f) {
+    env e;
+    address addr;
+
+    uint8 type;
+    require type <= 1;
+
+    address delegateBefore = type == 1 ? getPropositionDelegate(addr) : getVotingDelegate(addr);
+
+    metaDelegateByType(e,   addr, _, 1 - type, _, _, _, _);
+
+    address delegateAfter = type == 1 ? getPropositionDelegate(addr) : getVotingDelegate(addr);
+
+    assert delegateBefore == delegateAfter;
+}
+
+rule powerChangesOnTransfer() {
+    env e;
+    address bob;
+    require e.msg.sender != bob;
+    uint256 amount;
+
+    uint8 type;
+    require type <= 1;
+    uint256 powerBefore = getPowerCurrent(e.msg.sender, type);
+    uint256 bobPowerBefore = getPowerCurrent(bob, type);
+    // Assert balances are sane to avoid impossible corner cases
+    require(balanceOf(e.msg.sender) < MAX_DELEGATED_BALANCE());
+    require(getDelegatedVotingBalance(e.msg.sender) < MAX_DELEGATED_BALANCE());
+    require(getDelegatedPropositionBalance(e.msg.sender) < MAX_DELEGATED_BALANCE());
+    require(balanceOf(bob) < MAX_DELEGATED_BALANCE());
+    require(getDelegatedVotingBalance(bob) < MAX_DELEGATED_BALANCE());
+    require(getDelegatedPropositionBalance(bob) < MAX_DELEGATED_BALANCE());
+
+    transfer(e, bob, amount);
+
+    uint256 powerAfter = getPowerCurrent(e.msg.sender, type);
+    uint256 bobPowerAfter = getPowerCurrent(bob, type);
+
+    assert powerAfter == powerBefore - amount
+        && bobPowerAfter == bobPowerBefore + amount;
+}
+
 /**
 
     A ghost variable that tracks the sum of all addresses' balances
