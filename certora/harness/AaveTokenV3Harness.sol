@@ -165,7 +165,8 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     uint104 impactOnDelegationAfter,
     address delegatee,
     GovernancePowerType delegationType
-  ) public { // public instead of internal for testing a particular condition in this function
+  ) public {
+    // public instead of internal for testing a particular condition in this function
     if (delegatee == address(0)) return;
     if (impactOnDelegationBefore == impactOnDelegationAfter) return;
 
@@ -173,14 +174,10 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     uint72 impactOnDelegationBefore72 = uint72(impactOnDelegationBefore / POWER_SCALE_FACTOR);
     uint72 impactOnDelegationAfter72 = uint72(impactOnDelegationAfter / POWER_SCALE_FACTOR);
 
-    bool testCondition = (delegationType == GovernancePowerType.VOTING
-            &&
-            _balances[delegatee].delegatedVotingBalance < impactOnDelegationBefore72)
-            || (
-            delegationType == GovernancePowerType.PROPOSITION
-            &&
-            _balances[delegatee].delegatedPropositionBalance < impactOnDelegationBefore72
-            );
+    bool testCondition = (delegationType == GovernancePowerType.VOTING &&
+      _balances[delegatee].delegatedVotingBalance < impactOnDelegationBefore72) ||
+      (delegationType == GovernancePowerType.PROPOSITION &&
+        _balances[delegatee].delegatedPropositionBalance < impactOnDelegationBefore72);
     require(!testCondition);
 
     if (delegationType == GovernancePowerType.VOTING) {
@@ -399,51 +396,55 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     Harness section - replace struct reads and writes with function calls
    */
 
-//   struct DelegationAwareBalance {
-//     uint104 balance;
-//     uint72 delegatedPropositionBalance;
-//     uint72 delegatedVotingBalance;
-//     bool delegatingProposition;
-//     bool delegatingVoting;
-//   }
+  //   struct DelegationAwareBalance {
+  //     uint104 balance;
+  //     uint72 delegatedPropositionBalance;
+  //     uint72 delegatedVotingBalance;
+  //     bool delegatingProposition;
+  //     bool delegatingVoting;
+  //   }
 
-
-   function getBalance(address user) view public returns (uint104) {
+  function getBalance(address user) public view returns (uint104) {
     return _balances[user].balance;
-   }
+  }
 
-   function getDelegatedPropositionBalance(address user) view public returns (uint72) {
+  function getDelegatedPropositionBalance(address user) public view returns (uint72) {
     return _balances[user].delegatedPropositionBalance;
-   }
+  }
 
-
-   function getDelegatedVotingBalance(address user) view public returns (uint72) {
+  function getDelegatedVotingBalance(address user) public view returns (uint72) {
     return _balances[user].delegatedVotingBalance;
-   }
+  }
 
+  function getDelegatingProposition(address user) public view returns (bool) {
+    return
+      _balances[user].delegationState == DelegationState.PROPOSITION_DELEGATED ||
+      _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
+  }
 
-   function getDelegatingProposition(address user) view public returns (bool) {
-    return _balances[user].delegationState == DelegationState.PROPOSITION_DELEGATED ||
-        _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
-   }
+  function getDelegatingVoting(address user) public view returns (bool) {
+    return
+      _balances[user].delegationState == DelegationState.VOTING_DELEGATED ||
+      _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
+  }
 
-
-   function getDelegatingVoting(address user) view public returns (bool) {
-     return _balances[user].delegationState == DelegationState.VOTING_DELEGATED ||
-        _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
-   }
-
-   function getVotingDelegate(address user) view public returns (address) {
+  function getVotingDelegate(address user) public view returns (address) {
     return _votingDelegateeV2[user];
-   }
+  }
 
-   function getPropositionDelegate(address user) view public returns (address) {
+  function getPropositionDelegate(address user) public view returns (address) {
     return _propositionDelegateeV2[user];
-   }
+  }
 
+  function getNonce(address user) public view returns (uint256) {
+    return _nonces[user];
+  }
 
+  function getdelegationStatus(address user) public view returns (DelegationState) {
+    return _balances[user].delegationState;
+  }
 
-   /**
+  /**
      End of harness section
     */
 }

@@ -302,8 +302,7 @@ function __checkDelegateeDelegatedVotingBalance(address user) returns bool{
 
 /* 11. Nounce can change on only some functions. */
 
-rule nonceChangeEffectCheck() filtered {f -> !f.isFallback }{
-    method f;env e;calldataarg args;
+rule nonceChangeEffectCheck(method f,env e,calldataarg args) filtered {f -> !f.isFallback }{
     address alice;
     require(alice!=0);
     uint256 nonceBefore=getNonce(alice);
