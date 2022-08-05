@@ -665,15 +665,15 @@ rule changeNonceFunctions {
 **/
 rule changeStateFunctions {
   env e;
-  address user;
+  address alice;
   method f;
   calldataarg args;
 
-  uint8 delegationStateBefore = getDelegationState(user);
+  uint8 delegationStateBefore = getDelegationState(alice);
 
   f(e, args);
 
-  uint8 delegationStateAfter = getDelegationState(user);
+  uint8 delegationStateAfter = getDelegationState(alice);
 
   require delegationStateBefore != delegationStateAfter;
 
