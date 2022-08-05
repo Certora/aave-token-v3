@@ -165,7 +165,7 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     uint104 impactOnDelegationAfter,
     address delegatee,
     GovernancePowerType delegationType
-  ) public { // public instead of internal for testing a particular condition in this function
+  ) internal { // public instead of internal for testing a particular condition in this function
     if (delegatee == address(0)) return;
     if (impactOnDelegationBefore == impactOnDelegationAfter) return;
 
@@ -407,6 +407,9 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
 //     bool delegatingVoting;
 //   }
 
+  function getDelegationState(address user) view public returns (DelegationState) {
+    return _balances[user].delegationState;
+  }
 
    function getBalance(address user) view public returns (uint104) {
     return _balances[user].balance;
