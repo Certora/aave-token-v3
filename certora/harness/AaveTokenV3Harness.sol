@@ -441,7 +441,9 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     return _propositionDelegateeV2[user];
    }
 
-
+   function getNoDelegation(address user) view public returns (bool) {
+    return _balances[user].delegationState == DelegationState.NO_DELEGATION;    
+   }
 
    /**
      End of harness section
