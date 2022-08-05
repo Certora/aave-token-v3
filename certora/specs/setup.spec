@@ -25,8 +25,9 @@ methods {
     getDelegationState(address user) returns (uint8) envfree
     getVotingDelegate(address user) returns (address) envfree
     getPropositionDelegate(address user) returns (address) envfree
-    ecrecover_wrapper(bytes32 digest, uint8 v, bytes32 r, bytes32 s) returns (address) envfree
-    computeMetaDelegateHash(address delegator,  address delegatee,  uint256 deadline, uint256 nonce) returns (bytes32) envfree
+    ecrecoverWrapper(bytes32 digest, uint8 v, bytes32 r, bytes32 s) returns (address) envfree
+    computeMetaDelegateHash(address delegator,  address delegatee, uint256 deadline, uint256 nonce) returns (bytes32) envfree
+    computeMetaDelegateByTypeHash(address delegator,  address delegatee, uint8 delegationType, uint256 deadline, uint256 nonce) returns (bytes32) envfree
     _nonces(address addr) returns (uint256) envfree
 }
 
@@ -198,8 +199,17 @@ invariant totalSupplyEqualsBalances()
  * Check `metaDelegate` can only be called with a signed request.
  */
 rule metaDelegateOnlyCallableWithProperlySignedArguments(env e, address delegator, address delegatee, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
-    require ecrecover_wrapper(computeMetaDelegateHash(delegator, delegatee, deadline, _nonces(delegator)), v, r, s) != delegator;
+    require ecrecoverWrapper(computeMetaDelegateHash(delegator, delegatee, deadline, _nonces(delegator)), v, r, s) != delegator;
     metaDelegate@withrevert(e, delegator, delegatee, deadline, v, r, s);
+    assert lastReverted;
+}
+
+/**
+ * Check `metaDelegateByType` can only be called with a signed request.
+ */
+rule metaDelegateByTypeOnlyCallableWithProperlySignedArguments(env e, address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    require ecrecoverWrapper(computeMetaDelegateByTypeHash(delegator, delegatee, delegationType, deadline, _nonces(delegator)), v, r, s) != delegator;
+    metaDelegateByType@withrevert(e, delegator, delegatee, delegationType, deadline, v, r, s);
     assert lastReverted;
 }
 
@@ -213,13 +223,32 @@ rule metaDelegateNonRepeatable(env e1, env e2, address delegator, address delega
     // assume no hash collisions
     require hash1 != hash2;
     // assume first call is properly signed
-    require ecrecover_wrapper(hash1, v, r, s) == delegator;
+    require ecrecoverWrapper(hash1, v, r, s) == delegator;
     // assume ecrecover is sane: cannot sign two different messages with the same (v,r,s)
-    require ecrecover_wrapper(hash2, v, r, s) != ecrecover_wrapper(hash1, v, r, s);
+    require ecrecoverWrapper(hash2, v, r, s) != ecrecoverWrapper(hash1, v, r, s);
     metaDelegate(e1, delegator, delegatee, deadline, v, r, s);
     metaDelegate@withrevert(e2, delegator, delegatee, deadline, v, r, s);
     assert lastReverted;
 }
+
+/**
+ * Check that it's impossible to use the same arguments to call `metaDalegateByType` twice.
+ */
+rule metaDelegateByTypeNonRepeatable(env e1, env e2, address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    uint256 nonce = _nonces(delegator);
+    bytes32 hash1 = computeMetaDelegateByTypeHash(delegator, delegatee, delegationType, deadline, nonce);
+    bytes32 hash2 = computeMetaDelegateByTypeHash(delegator, delegatee, delegationType, deadline, nonce+1);
+    // assume no hash collisions
+    require hash1 != hash2;
+    // assume first call is properly signed
+    require ecrecoverWrapper(hash1, v, r, s) == delegator;
+    // assume ecrecover is sane: cannot sign two different messages with the same (v,r,s)
+    require ecrecoverWrapper(hash2, v, r, s) != ecrecoverWrapper(hash1, v, r, s);
+    metaDelegateByType(e1, delegator, delegatee, delegationType, deadline, v, r, s);
+    metaDelegateByType@withrevert(e2, delegator, delegatee, delegationType, deadline, v, r, s);
+    assert lastReverted;
+}
+
 
 /**
  * Check that `metaDelegate` respects the `deadline` argument.
@@ -229,6 +258,16 @@ rule metaDelegateInvalidAfterDeadline(env e, address delegator, address delegate
     metaDelegate@withrevert(e, delegator, delegatee, deadline, v, r, s);
     assert lastReverted;
 }
+
+/**
+ * Check that `metaDelegateByType` respects the `deadline` argument.
+ */
+rule metaDelegateByTypeInvalidAfterDeadline(env e, address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    require e.block.timestamp > deadline;
+    metaDelegateByType@withrevert(e, delegator, delegatee, delegationType, deadline, v, r, s);
+    assert lastReverted;
+}
+
 
 /**
  * Check that the effect on the balance / delegation state of _any_ participant
@@ -249,6 +288,27 @@ rule metaDelegateSameAsDelegate(env eD, env eMD, address delegator, address dele
     
     assert numericUserStateD == numericUserStateMD &&
         addressUserStateD == addressUserStateMD;
+}
+
+/**
+ * Check that the effect on the balance / delegation state of _any_ participant
+ * of the system is the same after calling `delegateByType` and `metaDelegateByType`.
+ */
+rule metaDelegateByTypeSameAsDelegateByType(env eDT, env eMDT, address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    storage initialStorage = lastStorage;
+    method f;
+    address user;
+    require delegator == eDT.msg.sender;
+    delegateByType(eDT, delegatee, delegationType);
+    uint256 numericUserStateDT = getPublicNumericUserState(f, user);
+    address addressUserStateDT = getPublicAddresUserState(f, user);
+
+    metaDelegateByType(eMDT, delegator, delegatee, delegationType, deadline, v, r, s) at initialStorage;
+    uint256 numericUserStateMDT = getPublicNumericUserState(f, user);
+    address addressUserStateMDT = getPublicAddresUserState(f, user);
+    
+    assert numericUserStateDT == numericUserStateMDT &&
+        addressUserStateDT == addressUserStateMDT;
 }
 
 /**
@@ -369,6 +429,7 @@ rule onlyPropositionPowerSourcesAreBalanceAndDelegation(address addr) {
     assert getPowerCurrent(addr, PROPOSITION_POWER()) ==
         getPropositionBalance(addr) + getScaledDelegatedPropositionPower(addr);
 }
+
 invariant nullAddressZeroBalance()
     balanceOf(0) == 0
 
