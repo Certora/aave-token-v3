@@ -8,7 +8,7 @@
     Public methods from the AaveTokenV3Harness.sol
 */
 
-methods{
+methods {
     totalSupply() returns (uint256) envfree
     balanceOf(address addr) returns (uint256) envfree
     transfer(address to, uint256 amount) returns (bool)
@@ -16,13 +16,54 @@ methods{
     delegate(address delegatee)
     metaDelegate(address, address, uint256, uint8, bytes32, bytes32)
     getPowerCurrent(address user, uint8 delegationType) returns (uint256) envfree
+    getPowersCurrent(address user) returns (uint256, uint256) envfree
     getBalance(address user) returns (uint104) envfree
     getDelegatedPropositionBalance(address user) returns (uint72) envfree
     getDelegatedVotingBalance(address user) returns (uint72) envfree
     getDelegatingProposition(address user) returns (bool) envfree
     getDelegatingVoting(address user) returns (bool) envfree
+    getDelegationState(address user) returns (uint8) envfree
     getVotingDelegate(address user) returns (address) envfree
     getPropositionDelegate(address user) returns (address) envfree
+    ecrecoverWrapper(bytes32 digest, uint8 v, bytes32 r, bytes32 s) returns (address) envfree
+    computeMetaDelegateHash(address delegator,  address delegatee, uint256 deadline, uint256 nonce) returns (bytes32) envfree
+    computeMetaDelegateByTypeHash(address delegator,  address delegatee, uint8 delegationType, uint256 deadline, uint256 nonce) returns (bytes32) envfree
+    _nonces(address addr) returns (uint256) envfree
+}
+
+/**
+ * Helper for parametrically assessing user state: all public getters for address values.
+ */
+function getPublicAddresUserState(method f, address user) returns address {
+    if (f.selector == getVotingDelegate(address).selector) {
+        return getVotingDelegate(user);
+    }   
+    if (f.selector == getPropositionDelegate(address).selector) {
+        return getPropositionDelegate(user);
+    }
+    return 0;
+}
+
+/**
+ * Helper for parametrically assessing user state: all public getters for numeric values.
+ */
+function getPublicNumericUserState(method f, address user) returns uint256 {
+    if (f.selector == getBalance(address).selector) {
+        return getBalance(user);
+    } 
+    if (f.selector == getDelegatedPropositionBalance(address).selector) {
+        return getDelegatedPropositionBalance(user);
+    }
+    if (f.selector == getDelegatedVotingBalance(address).selector) {
+        return getDelegatedPropositionBalance(user);
+    }
+    if (f.selector == getDelegatingProposition(address).selector) {
+        return getDelegatingProposition(user) ? to_uint256(1) : to_uint256(0);
+    }
+    if (f.selector == getDelegatingVoting(address).selector) {
+        return getDelegatingVoting(user) ? to_uint256(1) : to_uint256(0);
+    }    
+    return 0;
 }
 
 /**
@@ -49,6 +90,22 @@ definition MAX_DELEGATED_BALANCE() returns uint256 = 16000000 * 10^18 / DELEGATE
 
 function normalize(uint256 amount) returns uint256 {
     return to_uint256(amount / DELEGATED_POWER_DIVIDER() * DELEGATED_POWER_DIVIDER());
+}
+
+function getScaledDelegatedVotingPower(address addr) returns uint256 {
+    return to_uint256(DELEGATED_POWER_DIVIDER() * getDelegatedVotingBalance(addr));
+}
+
+function getScaledDelegatedPropositionPower(address addr) returns uint256 {
+    return to_uint256(DELEGATED_POWER_DIVIDER() * getDelegatedPropositionBalance(addr));
+}
+
+function getVotingBalance(address addr) returns uint256 {
+    return getDelegatingVoting(addr) ? 0 : balanceOf(addr);
+}
+
+function getPropositionBalance(address addr) returns uint256 {
+    return getDelegatingProposition(addr) ? 0 : balanceOf(addr);
 }
 
 /**
@@ -90,7 +147,6 @@ rule delegateCorrectness(address bob) {
     An example for a parametric rule.
 
 */
-
 rule votingDelegateChanges(address alice, method f) {
     env e;
     calldataarg args;
@@ -118,6 +174,7 @@ ghost mathint sumBalances {
     init_state axiom sumBalances == 0;
 }
 
+
 /**
 
     This hook updates the sumBalances ghost whenever any address balance is updated
@@ -136,3 +193,268 @@ hook Sstore _balances[KEY address user].balance uint104 balance
 */
 invariant totalSupplyEqualsBalances()
     sumBalances == totalSupply()
+
+
+/**
+ * Check `metaDelegate` can only be called with a signed request.
+ */
+rule metaDelegateOnlyCallableWithProperlySignedArguments(env e, address delegator, address delegatee, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    require ecrecoverWrapper(computeMetaDelegateHash(delegator, delegatee, deadline, _nonces(delegator)), v, r, s) != delegator;
+    metaDelegate@withrevert(e, delegator, delegatee, deadline, v, r, s);
+    assert lastReverted;
+}
+
+/**
+ * Check `metaDelegateByType` can only be called with a signed request.
+ */
+rule metaDelegateByTypeOnlyCallableWithProperlySignedArguments(env e, address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    require ecrecoverWrapper(computeMetaDelegateByTypeHash(delegator, delegatee, delegationType, deadline, _nonces(delegator)), v, r, s) != delegator;
+    metaDelegateByType@withrevert(e, delegator, delegatee, delegationType, deadline, v, r, s);
+    assert lastReverted;
+}
+
+/**
+ * Check that it's impossible to use the same arguments to call `metaDalegate` twice.
+ */
+rule metaDelegateNonRepeatable(env e1, env e2, address delegator, address delegatee, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    uint256 nonce = _nonces(delegator);
+    bytes32 hash1 = computeMetaDelegateHash(delegator, delegatee, deadline, nonce);
+    bytes32 hash2 = computeMetaDelegateHash(delegator, delegatee, deadline, nonce+1);
+    // assume no hash collisions
+    require hash1 != hash2;
+    // assume first call is properly signed
+    require ecrecoverWrapper(hash1, v, r, s) == delegator;
+    // assume ecrecover is sane: cannot sign two different messages with the same (v,r,s)
+    require ecrecoverWrapper(hash2, v, r, s) != ecrecoverWrapper(hash1, v, r, s);
+    metaDelegate(e1, delegator, delegatee, deadline, v, r, s);
+    metaDelegate@withrevert(e2, delegator, delegatee, deadline, v, r, s);
+    assert lastReverted;
+}
+
+/**
+ * Check that it's impossible to use the same arguments to call `metaDalegateByType` twice.
+ */
+rule metaDelegateByTypeNonRepeatable(env e1, env e2, address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    uint256 nonce = _nonces(delegator);
+    bytes32 hash1 = computeMetaDelegateByTypeHash(delegator, delegatee, delegationType, deadline, nonce);
+    bytes32 hash2 = computeMetaDelegateByTypeHash(delegator, delegatee, delegationType, deadline, nonce+1);
+    // assume no hash collisions
+    require hash1 != hash2;
+    // assume first call is properly signed
+    require ecrecoverWrapper(hash1, v, r, s) == delegator;
+    // assume ecrecover is sane: cannot sign two different messages with the same (v,r,s)
+    require ecrecoverWrapper(hash2, v, r, s) != ecrecoverWrapper(hash1, v, r, s);
+    metaDelegateByType(e1, delegator, delegatee, delegationType, deadline, v, r, s);
+    metaDelegateByType@withrevert(e2, delegator, delegatee, delegationType, deadline, v, r, s);
+    assert lastReverted;
+}
+
+
+/**
+ * Check that `metaDelegate` respects the `deadline` argument.
+ */
+rule metaDelegateInvalidAfterDeadline(env e, address delegator, address delegatee, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    require e.block.timestamp > deadline;
+    metaDelegate@withrevert(e, delegator, delegatee, deadline, v, r, s);
+    assert lastReverted;
+}
+
+/**
+ * Check that `metaDelegateByType` respects the `deadline` argument.
+ */
+rule metaDelegateByTypeInvalidAfterDeadline(env e, address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    require e.block.timestamp > deadline;
+    metaDelegateByType@withrevert(e, delegator, delegatee, delegationType, deadline, v, r, s);
+    assert lastReverted;
+}
+
+
+/**
+ * Check that the effect on the balance / delegation state of _any_ participant
+ * of the system is the same after calling `delegate` and `metaDelegate`.
+ */
+rule metaDelegateSameAsDelegate(env eD, env eMD, address delegator, address delegatee, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    storage initialStorage = lastStorage;
+    method f;
+    address user;
+    require delegator == eD.msg.sender;
+    delegate(eD, delegatee);
+    uint256 numericUserStateD = getPublicNumericUserState(f, user);
+    address addressUserStateD = getPublicAddresUserState(f, user);
+
+    metaDelegate(eMD, delegator, delegatee, deadline, v, r, s) at initialStorage;
+    uint256 numericUserStateMD = getPublicNumericUserState(f, user);
+    address addressUserStateMD = getPublicAddresUserState(f, user);
+    
+    assert numericUserStateD == numericUserStateMD &&
+        addressUserStateD == addressUserStateMD;
+}
+
+/**
+ * Check that the effect on the balance / delegation state of _any_ participant
+ * of the system is the same after calling `delegateByType` and `metaDelegateByType`.
+ */
+rule metaDelegateByTypeSameAsDelegateByType(env eDT, env eMDT, address delegator, address delegatee, uint8 delegationType, uint256 deadline, uint8 v, bytes32 r, bytes32 s) {
+    storage initialStorage = lastStorage;
+    method f;
+    address user;
+    require delegator == eDT.msg.sender;
+    delegateByType(eDT, delegatee, delegationType);
+    uint256 numericUserStateDT = getPublicNumericUserState(f, user);
+    address addressUserStateDT = getPublicAddresUserState(f, user);
+
+    metaDelegateByType(eMDT, delegator, delegatee, delegationType, deadline, v, r, s) at initialStorage;
+    uint256 numericUserStateMDT = getPublicNumericUserState(f, user);
+    address addressUserStateMDT = getPublicAddresUserState(f, user);
+    
+    assert numericUserStateDT == numericUserStateMDT &&
+        addressUserStateDT == addressUserStateMDT;
+}
+
+/**
+ * Check that the effect on the balance / delegation state of _any_ participant
+ * of the system is the same after calling `delegate` and `delegateByType` for
+ * both types.
+ */
+rule delegateByBothTypesSameAsDelegate(env e1, env e2, env e3, address delegatee) {
+    storage initialStorage = lastStorage;
+    method f;
+    address user;
+    require e1.msg.sender == e2.msg.sender && e1.msg.sender == e3.msg.sender;
+    delegate(e1, delegatee);
+    uint256 numericUserStateD = getPublicNumericUserState(f, user);
+    address addressUserStateD = getPublicAddresUserState(f, user);
+
+    delegateByType(e2, delegatee, VOTING_POWER()) at initialStorage;
+    delegateByType(e3, delegatee, PROPOSITION_POWER());
+    uint256 numericUserStateMD = getPublicNumericUserState(f, user);
+    address addressUserStateMD = getPublicAddresUserState(f, user);
+    
+    assert numericUserStateD == numericUserStateMD &&
+        addressUserStateD == addressUserStateMD;
+}
+
+/**
+ * Check that the effect on the balance / delegation state of _any_ participant
+ * of the system is the same after calling ` metaDelegate` and `metaDelegateByType` for
+ * both types.
+ */
+rule metaDelegateSameAsMetaDelegateByType(
+    env e1, env e2, env e3,
+    address delegator, address delegatee, 
+    uint256 d1, uint256 d2, uint256 d3,
+    uint8 v1, uint8 v2, uint8 v3,
+    bytes32 r1, bytes32 r2, bytes32 r3,
+    bytes32 s1, bytes32 s2, bytes32 s3) {
+
+    storage initialStorage = lastStorage;
+    method f;
+    address user;
+
+    metaDelegate(e1, delegator, delegatee, d1, v1, r1, s1);
+
+    uint256 numericUserStateMD = getPublicNumericUserState(f, user);
+    address addressUserStateMD = getPublicAddresUserState(f, user);
+
+    metaDelegateByType(e2, delegator, delegatee, VOTING_POWER(), d2, v2, r2, s2) at initialStorage;
+    metaDelegateByType(e3, delegator, delegatee, PROPOSITION_POWER(), d3, v3, r3, s3);
+
+    uint256 numericUserStateMDT = getPublicNumericUserState(f, user);
+    address addressUserStateMDT = getPublicAddresUserState(f, user);
+    
+    assert numericUserStateMD == numericUserStateMDT &&
+        addressUserStateMD == addressUserStateMDT;
+}
+
+
+/**
+ * Axiomatizing a weakening of the property that an address's `delegatedVotingBalance`
+ * is the scaled sum of the balances of its delegators.
+ * NB: this would optimally be an invariant, but I've failed to prove it too many times.
+ */
+function assumeBalanceDoesNotExceedDelegatedVotingBalance(address delegator) {
+    address delegatee = getVotingDelegate(delegator);
+    require delegatee != 0 => getDelegatedVotingBalance(delegatee) >= getBalance(delegator) / DELEGATED_POWER_DIVIDER() ;
+}
+
+/**
+ * Axiomatizing a weakening of the property that an address's `delegatedPropositionBalance`
+ * is the scaled sum of the balances of its delegators.
+ * NB: this would optimally be an invariant, but I've failed to prove it too many times.
+ */
+function assumeBalanceDoesNotExceedDelegatedPropositionBalance(address delegator) {
+    address delegatee = getPropositionDelegate(delegator);
+    require delegatee != 0 => getDelegatedPropositionBalance(delegatee) >= getBalance(delegator) / DELEGATED_POWER_DIVIDER();
+}
+
+/**
+ * Check that delegating to zero resets the delegates – i.e. it is possible to withdraw
+ * delegated power.
+ */
+rule delegationToZeroReclaimsFullPower(env e) {
+    assumeBalanceDoesNotExceedDelegatedVotingBalance(e.msg.sender);
+    assumeBalanceDoesNotExceedDelegatedPropositionBalance(e.msg.sender);
+    requireInvariant delegatingVotingIffVotingDelegateIsNonZero(e.msg.sender);
+    requireInvariant delegatingPropositionIffPropositionDelegateIsNonZero(e.msg.sender);
+    requireInvariant delegationStateFlagIsLessThan4(e.msg.sender);
+    delegate(e, 0);
+    assert getVotingDelegate(e.msg.sender) == 0 &&
+        getPropositionDelegate(e.msg.sender) == 0;
+}
+
+/**
+ * Check that it is _always_ possible to withdraw power: the message never reverts,
+ * the user is never locked into delegation.
+ */
+rule delegationToZeroAlwaysPossible(env e) {
+    assumeBalanceDoesNotExceedDelegatedVotingBalance(e.msg.sender);
+    assumeBalanceDoesNotExceedDelegatedPropositionBalance(e.msg.sender);    
+    requireInvariant delegationStateFlagIsLessThan4(e.msg.sender);
+    require e.msg.value == 0;
+    delegate@withrevert(e, 0);
+    assert !lastReverted;
+}
+
+rule getPowersAgreesWithGetPower(address addr) {
+    assert (getPowerCurrent(addr, VOTING_POWER()), getPowerCurrent(addr, PROPOSITION_POWER())) ==
+        getPowersCurrent(addr);
+}
+
+rule onlyVotingPowerSourcesAreBalanceAndDelegation(address addr) {
+    assert getPowerCurrent(addr, VOTING_POWER()) ==
+        getVotingBalance(addr) + getScaledDelegatedVotingPower(addr);
+}
+
+rule onlyPropositionPowerSourcesAreBalanceAndDelegation(address addr) {
+    assert getPowerCurrent(addr, PROPOSITION_POWER()) ==
+        getPropositionBalance(addr) + getScaledDelegatedPropositionPower(addr);
+}
+
+invariant nullAddressZeroBalance()
+    balanceOf(0) == 0
+
+invariant nullAdressZeroVotingPower() 
+    getPowerCurrent(0, VOTING_POWER()) == 0 {
+        preserved {
+            requireInvariant nullAddressZeroBalance();
+        }
+    }
+
+invariant nullAdressZeroPropositionPower()
+    getPowerCurrent(0, PROPOSITION_POWER()) == 0 {
+        preserved {
+            requireInvariant nullAddressZeroBalance();
+        }
+    }
+
+invariant neverSelfDelegate(address addr)
+    addr != 0 => getVotingDelegate(addr) != addr
+
+invariant delegatingVotingIffVotingDelegateIsNonZero(address addr)
+    getDelegatingVoting(addr) <=> getVotingDelegate(addr) != 0
+
+invariant delegatingPropositionIffPropositionDelegateIsNonZero(address addr)
+    getDelegatingProposition(addr) <=> getPropositionDelegate(addr) != 0
+
+invariant delegationStateFlagIsLessThan4(address addr)
+    getDelegationState(addr) < 4

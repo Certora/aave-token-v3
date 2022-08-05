@@ -165,7 +165,7 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     uint104 impactOnDelegationAfter,
     address delegatee,
     GovernancePowerType delegationType
-  ) public { // public instead of internal for testing a particular condition in this function
+  ) internal { // public instead of internal for testing a particular condition in this function
     if (delegatee == address(0)) return;
     if (impactOnDelegationBefore == impactOnDelegationAfter) return;
 
@@ -441,7 +441,60 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     return _propositionDelegateeV2[user];
    }
 
+  function getDelegationState(address user) public view returns (DelegationState) {
+    return _balances[user].delegationState;
+  }
 
+  function ecrecoverWrapper(
+    bytes32 hash,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+  ) public pure returns (address) {
+    return ecrecover(hash, v, r, s);
+  }
+
+  function computeMetaDelegateHash(
+    address delegator,
+    address delegatee,
+    uint256 deadline,
+    uint256 nonce
+  ) public view returns (bytes32) {
+    bytes32 digest = keccak256(
+      abi.encodePacked(
+        '\x19\x01',
+        DOMAIN_SEPARATOR,
+        keccak256(abi.encode(DELEGATE_TYPEHASH, delegator, delegatee, nonce, deadline))
+      )
+    );
+    return digest;
+  }
+
+  function computeMetaDelegateByTypeHash(
+    address delegator,
+    address delegatee,
+    GovernancePowerType delegationType,
+    uint256 deadline,
+    uint256 nonce
+  ) public view returns (bytes32) {
+    bytes32 digest = keccak256(
+      abi.encodePacked(
+        '\x19\x01',
+        DOMAIN_SEPARATOR,
+        keccak256(
+          abi.encode(
+            DELEGATE_BY_TYPE_TYPEHASH,
+            delegator,
+            delegatee,
+            delegationType,
+            nonce,
+            deadline
+          )
+        )
+      )
+    );
+    return digest;
+  }
 
    /**
      End of harness section

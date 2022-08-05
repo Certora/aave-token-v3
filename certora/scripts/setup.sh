@@ -8,6 +8,7 @@ certoraRun certora/harness/AaveTokenV3Harness.sol:AaveTokenV3 \
     $RULE \
     --solc solc8.13 \
     --optimistic_loop \
+    --settings -useBitVectorTheory \
     --send_only \
     --cloud \
     --msg "AaveTokenV3:setup.spec $1"
