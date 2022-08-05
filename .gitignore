@@ -4,3 +4,4 @@ out/
 .certora_config/
 .last_confs/
 .certora_*
+certora/resource_errors.json
