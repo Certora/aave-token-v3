@@ -275,6 +275,39 @@ rule delegateByBothTypesSameAsDelegate(env e1, env e2, env e3, address delegatee
 }
 
 /**
+ * Check that the effect on the balance / delegation state of _any_ participant
+ * of the system is the same after calling ` metaDelegate` and `metaDelegateByType` for
+ * both types.
+ */
+rule metaDelegateSameAsMetaDelegateByType(
+    env e1, env e2, env e3,
+    address delegator, address delegatee, 
+    uint256 d1, uint256 d2, uint256 d3,
+    uint8 v1, uint8 v2, uint8 v3,
+    bytes32 r1, bytes32 r2, bytes32 r3,
+    bytes32 s1, bytes32 s2, bytes32 s3) {
+
+    storage initialStorage = lastStorage;
+    method f;
+    address user;
+
+    metaDelegate(e1, delegator, delegatee, d1, v1, r1, s1);
+
+    uint256 numericUserStateMD = getPublicNumericUserState(f, user);
+    address addressUserStateMD = getPublicAddresUserState(f, user);
+
+    metaDelegateByType(e2, delegator, delegatee, VOTING_POWER(), d2, v2, r2, s2) at initialStorage;
+    metaDelegateByType(e3, delegator, delegatee, PROPOSITION_POWER(), d3, v3, r3, s3);
+
+    uint256 numericUserStateMDT = getPublicNumericUserState(f, user);
+    address addressUserStateMDT = getPublicAddresUserState(f, user);
+    
+    assert numericUserStateMD == numericUserStateMDT &&
+        addressUserStateMD == addressUserStateMDT;
+}
+
+
+/**
  * Axiomatizing a weakening of the property that an address's `delegatedVotingBalance`
  * is the scaled sum of the balances of its delegators.
  * NB: this would optimally be an invariant, but I've failed to prove it too many times.
