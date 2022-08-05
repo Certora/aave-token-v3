@@ -136,3 +136,95 @@ hook Sstore _balances[KEY address user].balance uint104 balance
 */
 invariant totalSupplyEqualsBalances()
     sumBalances == totalSupply()
+
+
+/**
+    Integrity of delegate(address delegatee)
+    Adds msg.sender’s balance to delegatee voting & proposing power
+    Updates voting delegate of msg.sender 
+*/
+
+rule CheckIntegrityOfDelegateeIsUpdated() {
+    env e;
+    address receiver;
+
+    uint256 balance_of_voting_power_of_sender = getPowerCurrent(e.msg.sender, VOTING_POWER());
+    uint256 delegator_balance_before = balanceOf(e.msg.sender);
+    address current_delegatee_before = getDelegateeByType(e, e.msg.sender, VOTING_POWER());
+
+    require receiver != e.msg.sender && receiver != 0;
+    delegate(e, receiver);
+
+    uint256 balance_of_voting_power_of_receiver = getPowerCurrent(receiver, VOTING_POWER());
+    uint256 delegator_balance_after = balanceOf(e.msg.sender);
+    address current_delegatee_after = getDelegateeByType(e, e.msg.sender, VOTING_POWER());
+
+    assert current_delegatee_after == receiver;
+}
+
+/**
+    An account cannot delegate power that has been delegated to it from another account 
+*/
+
+rule CannotDelegatePowerGivenBySomeOne {
+    env e;
+    address delegator2;
+    address delegator3;
+    uint256 deadline;
+    uint8 v;
+    bytes32 r;
+    bytes32 s;
+
+    require delegator2 != e.msg.sender && delegator2 != 0;
+    require delegator3 != delegator2 && delegator3 != 0;
+
+    uint256 balance_of_voting_power_of_sender = getPowerCurrent(e.msg.sender, VOTING_POWER());
+    uint256 balance_of_delegator2_before = balanceOf(delegator2);
+    uint256 balance_of_voting_power_of_delegator2_before = getPowerCurrent(delegator2, VOTING_POWER());
+    uint256 delegator_balance_before = balanceOf(e.msg.sender); 
+    delegate(e, delegator2);
+
+    uint256 balance_of_voting_power_of_delegator2 = getPowerCurrent(delegator2, VOTING_POWER());
+    env e1;
+    metaDelegateByType(e1, delegator2, delegator3, VOTING_POWER(), deadline, v, r, s);
+    uint256 balance_of_voting_power_of_delegator3 = getPowerCurrent(delegator3, VOTING_POWER());
+
+    assert balance_of_voting_power_of_delegator2_before == balance_of_voting_power_of_delegator3;
+}
+
+/**
+    If an account is delegating, it needs to delegate full power and not the portion of it
+*/
+
+rule ShouldBeAbleTransferFullPower {
+    env e1;
+    address receiver;
+
+    require receiver != e1.msg.sender && receiver != 0;
+
+    uint256 balance_of_voting_power_of_sender = getPowerCurrent(e1.msg.sender, VOTING_POWER());
+    delegate(e1, receiver);
+    uint256 balance_of_voting_power_of_receiver = getPowerCurrent(receiver, VOTING_POWER());
+    uint256 balance_of_receiver = balanceOf(receiver);
+
+    assert balance_of_voting_power_of_sender == balance_of_voting_power_of_receiver - balance_of_receiver;
+}
+
+/**
+    User can delegate power only if his balance is > 0
+*/
+
+rule ShouldTransferPowerIfBalanceIsGreaterThanZero {
+    env e1;
+    address receiver;
+
+    require receiver != e1.msg.sender && receiver != 0;
+    require balanceOf(e1.msg.sender) > 0; 
+
+    uint256 balance_of_voting_power_of_sender = getPowerCurrent(e1.msg.sender, VOTING_POWER());
+    delegate(e1, receiver);
+    uint256 balance_of_voting_power_of_receiver = getPowerCurrent(receiver, VOTING_POWER());
+    uint256 balance_of_receiver = balanceOf(receiver);
+
+    assert balance_of_voting_power_of_sender == balance_of_voting_power_of_receiver - balance_of_receiver;
+}
