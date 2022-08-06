@@ -19,14 +19,6 @@ abstract contract BaseAaveToken is Context, IERC20Metadata {
     uint72 delegatedPropositionBalance;
     uint72 delegatedVotingBalance;
     DelegationState delegationState;
-    uint8 delegationState00;
-    uint8 delegationState01;
-    uint8 delegationState02;
-    uint8 delegationState03;
-    uint8 delegationState1;
-    uint8 delegationState2;
-    uint8 delegationState3;
-    uint8 delegationState4;
   }
 
   mapping(address => DelegationAwareBalance) public _balances;
