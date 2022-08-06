@@ -173,16 +173,6 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     uint72 impactOnDelegationBefore72 = uint72(impactOnDelegationBefore / POWER_SCALE_FACTOR);
     uint72 impactOnDelegationAfter72 = uint72(impactOnDelegationAfter / POWER_SCALE_FACTOR);
 
-    bool testCondition = (delegationType == GovernancePowerType.VOTING
-            &&
-            _balances[delegatee].delegatedVotingBalance < impactOnDelegationBefore72)
-            || (
-            delegationType == GovernancePowerType.PROPOSITION
-            &&
-            _balances[delegatee].delegatedPropositionBalance < impactOnDelegationBefore72
-            );
-    require(!testCondition);
-
     if (delegationType == GovernancePowerType.VOTING) {
       _balances[delegatee].delegatedVotingBalance =
         _balances[delegatee].delegatedVotingBalance -
@@ -241,7 +231,6 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
       uint104 toBalanceBefore = toUserState.balance;
       toUserState.balance = toBalanceBefore + uint104(amount);
       _balances[to] = toUserState;
-
       if (toUserState.delegationState != DelegationState.NO_DELEGATION) {
         _governancePowerTransferByType(
           toBalanceBefore,
@@ -249,6 +238,7 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
           _getDelegateeByType(to, toUserState, GovernancePowerType.VOTING),
           GovernancePowerType.VOTING
         );
+
         _governancePowerTransferByType(
           toBalanceBefore,
           toUserState.balance,
@@ -385,7 +375,7 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     _updateDelegateeByType(delegator, delegationType, delegatee);
 
     if (willDelegateAfter != delegatingNow) {
-      _balances[delegator] = _updateDelegationFlagByType(
+      _balances[delegator] = harnessupdateDelegationFlagByType(
         delegatorState,
         delegationType,
         willDelegateAfter
@@ -395,7 +385,7 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     emit DelegateChanged(delegator, delegatee, delegationType);
   }
 
-  /** 
+  /**
     Harness section - replace struct reads and writes with function calls
    */
 
@@ -427,11 +417,32 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
         _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
    }
 
+   function getDelegatingPropositionOnly(address user) view public returns (bool) {
+    return _balances[user].delegationState == DelegationState.PROPOSITION_DELEGATED;
+   }
 
    function getDelegatingVoting(address user) view public returns (bool) {
      return _balances[user].delegationState == DelegationState.VOTING_DELEGATED ||
         _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
    }
+
+   function getDelegatingVotingOnly(address user) view public returns (bool) {
+     return _balances[user].delegationState == DelegationState.VOTING_DELEGATED;
+   }
+
+   function getNotDelegating(address user) view public returns (bool) {
+     return _balances[user].delegationState == DelegationState.NO_DELEGATION;
+   }
+
+   function getFullDelegating(address user) view public returns (bool) {
+     return _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
+   }
+
+   function getDelegationState(address user) view public returns (uint8) {
+     return uint8(_balances[user].delegationState);
+   }
+
+
 
    function getVotingDelegate(address user) view public returns (address) {
     return _votingDelegateeV2[user];
@@ -441,7 +452,68 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     return _propositionDelegateeV2[user];
    }
 
+   function getAllowance(address owner, address spender) view public returns (uint256) {
+      return _allowances[owner][spender];
+   }
 
+   function getNonce(address user) view public returns (uint256) {
+      return _nonces[user];
+   }
+
+  //Function that works correctly updating flag type
+  function harnessupdateDelegationFlagByType(
+    DelegationAwareBalance memory userState,
+    GovernancePowerType delegationType,
+    bool willDelegate
+  ) public view returns (DelegationAwareBalance memory) {
+    uint8 state = uint8(userState.delegationState);
+    uint8 nextType = (uint8(delegationType) + 1);
+    uint8 nextState;
+    if (willDelegate) {
+      if(state == 0){
+        nextState = nextType;
+      }else if(state == 1){
+        if(nextType == 1){
+          nextState = state;
+        }else{
+          //Full delegated
+          nextState = 3;
+        }
+      }else if(state == 2){
+        if(nextType == 2){
+          nextState = state;
+        }else{
+          //Full delegated
+          nextState = 3;
+        }
+      }else{
+        //Full delegated
+        nextState = 3;
+      }
+    } else {
+      if(state == 1){
+        if(nextType == 1){
+          nextState = 0;
+        }else{
+          nextState = state;
+        }
+      }else if(state == 2){
+        if(nextType == 2){
+          nextState = 0;
+        }else{
+          nextState = state;
+        }
+      }else if(state == 3){
+        if(nextType == 1){
+          nextState = 2;
+        }else{
+          nextState = 1;
+        }
+      }
+    }
+    userState.delegationState = DelegationState(nextState);
+    return userState;
+  }
 
    /**
      End of harness section
