@@ -446,6 +446,10 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
      return _getDelegatedPowerByType(userBalance, delegationType);
    }
 
+   function getDelegationState(address user) public returns (uint8) {
+     return uint8(_balances[user].delegationState);
+   }
+
    /**
      End of harness section
     */

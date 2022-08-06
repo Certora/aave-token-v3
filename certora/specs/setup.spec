@@ -24,6 +24,7 @@ methods{
     getVotingDelegate(address user) returns (address) envfree
     getPropositionDelegate(address user) returns (address) envfree
     getDelegatedPowerByType(address user, uint8 delegationType) returns (uint256) envfree
+    getDelegationState(address user) returns (uint8) envfree
 }
 
 /**
@@ -152,11 +153,17 @@ hook Sstore _balances[KEY address user].delegatedVotingBalance uint72 new_delega
         sumDelegatedVotingBalances = sumDelegatedVotingBalances - to_mathint(old_delegated_voting_balance) + to_mathint(new_delegated_voting_balance);
     }
 
-// // TODO: Fix
-// invariant totalDelegatedVotingBalanceLessOrEqualsTotalSupply()
-//     sumDelegatedVotingBalances <= normalize(totalSupply())
+/**
+    Check that there is no way to increase or decrease the totalSupply
+*/
+rule nothingAffectsTotalSupply(env e, address user, method f){
+    uint256 totalSupplyBefore = totalSupply();
 
+    calldataarg args;
+    f(e, args);
 
+    assert totalSupply() == totalSupplyBefore;
+}
 
 /**
     It is not possible to delegate to the 0 address, the only voting power it has is its balance
@@ -164,34 +171,6 @@ hook Sstore _balances[KEY address user].delegatedVotingBalance uint72 new_delega
 invariant zeroAddressCanNotBeDelegatedTo()
     getDelegatedVotingBalance(0) == balanceOf(0) && getDelegatedPropositionBalance(0) == balanceOf(0)
 
-// // TODO: Continue debugging
-// rule transferReducesVotingPower(env e, address to, uint256 amount){
-//     require amount > 0;
-//     // Has to have enough balance for the transfer
-//     require balanceOf(e.msg.sender) >= amount;
-//     // Power won't reduce if send to themself
-//     require to != e.msg.sender;
-
-//     address fromVotingDelegate = getVotingDelegate(e.msg.sender) == 0 ? e.msg.sender : getVotingDelegate(e.msg.sender);
-//     address toVotingDelegate = getVotingDelegate(to) == 0 ? to : getVotingDelegate(to);
-
-//     address fromPropositionDelegate = getPropositionDelegate(e.msg.sender) == 0 ? e.msg.sender : getPropositionDelegate(e.msg.sender);
-//     address toPropositionDelegate = getPropositionDelegate(to) == 0 ? to : getPropositionDelegate(to);
-
-//     // They should be delegating to different users so we can see the change in voting power
-//     require fromVotingDelegate != toVotingDelegate;
-
-//     uint256 votingPowerBefore = getPowerCurrent(fromVotingDelegate, VOTING_POWER());
-//     //uint256 propositionPowerBefore = getPowerCurrent(propositionDelegate, PROPOSITION_POWER());
-
-//     transfer(e, to, amount);
-
-//     uint256 votingPowerAfter = getPowerCurrent(fromVotingDelegate, VOTING_POWER());
-//     //uint256 propositionPowerAfter = getPowerCurrent(propositionDelegate, PROPOSITION_POWER());
-
-//     assert votingPowerAfter < votingPowerBefore;
-//     //assert propositionPowerBefore - normalize(amount) == propositionPowerAfter;
-// }
 
 /**
    Alice can only change Bobs delegate through a valid meta transaction
@@ -218,11 +197,10 @@ rule anotherUserCanOnlyChangeDelegateThroughMeta(env e, address user, method f) 
     From the properties.md
     If an account is not receiving delegation of power (one type) from anybody,
     and that account is not delegating that power to anybody, the power of that account must be equal to its AAVE balance.
-
-    @note this does not hold, most likely an error in my rule but could be an issue with `delegationState` not correctly updating
 */
-//
 rule nonDelegatingUserPowerEqBalance(env e, bool delegateToSelf){
+    enforceValidUserState(e.msg.sender);
+    
     // User has no voting power being delegated to them
     require getPowerCurrent(e.msg.sender, VOTING_POWER()) == 0 && 
         getPowerCurrent(e.msg.sender, PROPOSITION_POWER()) == 0;
@@ -230,9 +208,6 @@ rule nonDelegatingUserPowerEqBalance(env e, bool delegateToSelf){
     // User stops delegating both types of power
     // either delegate to self directly or delegate to 0 address
     delegate(e, delegateToSelf ? e.msg.sender : 0);
-
-    // Uncommenting below line makes this hold, but this should be implicit
-    // require getDelegatingVoting(e.msg.sender) == false && getDelegatingProposition(e.msg.sender) == false;
     
     // Power of that account must be equal to its AAVE balance.
     assert getPowerCurrent(e.msg.sender, VOTING_POWER()) == getBalance(e.msg.sender) &&
@@ -240,28 +215,22 @@ rule nonDelegatingUserPowerEqBalance(env e, bool delegateToSelf){
 }
 
 /**
-    If proposition delegate is the 0 address then the user is not delegating its proposition power so the getDelegatingProposition should be false
-    @note this does not hold, invariant was written to get more detail on why 'nonDelegatingUserPowerEqBalance' was failing
-*/
-invariant correctnessOfDelegatingPropositionState(address user)
-    getPropositionDelegate(user) == 0 => getDelegatingProposition(user) == false
-
-
-/**
-    If voting delegate is the 0 address then the user is not delegating its voting power so the getDelegatingVoting should be false
-    @note this does not hold, invariant was written to get more detail on why 'nonDelegatingUserPowerEqBalance' was failing
-*/
-invariant correctnessOfDelegatingVotingState(address user)
-    getVotingDelegate(user) == 0 => getDelegatingVoting(user) == false
-
-/**
-    This invariant performs the 
-    
-    @note this does not hold, Changing `getVotingDelegate(user) == 0 ` to `getDelegatingVoting(user) == false` makes this hold, however this does not seem to be expected behaviour
+    This invariant check if the  result of `getPowerCurrent` is equal to the amount being delegated + the users balance (if they are not delegating)
 */
 invariant correctnessOfgetPowerCurrent(address user)
     getDelegatedPowerByType(user, VOTING_POWER()) // The amount delegated to this user
         +
-    (getVotingDelegate(user) == 0 ? getBalance(user) : 0) // if the user is self-delegating then the users balance should be added to the total
+    (getDelegatingVoting(user) == false ? getBalance(user) : 0) // if the user is self-delegating then the users balance should be added to the total
         ==
     getPowerCurrent(user, VOTING_POWER()) // is equal to the amount the method should return
+
+
+/**
+    The prover might use a starting state where `delegationState` is in an unreachable state
+    ex. `delegationState` set to `FULL_POWER_DELEGATED` but no delegate address set
+*/
+function enforceValidUserState(address user){
+    require getVotingDelegate(user) == 0 => getDelegatingVoting(user) == false;
+    require getPropositionDelegate(user) == 0 => getDelegatingProposition(user) == false;
+}
+
