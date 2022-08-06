@@ -2323,76 +2323,6 @@ rule senderCanNotDecreaseOtherBalance(method f)
         assert otherBalanceAfter >= otherBalanceBefore, "The balance must not decrease"; 
 }
 
-// /**
-
-//     A ghost variable that tracks the sum of all delegated voting power
-
-// */
-// ghost mathint sumDelegatedVotingPower {
-//     init_state axiom sumDelegatedVotingPower == 0;
-// }
-
-// /**
-
-//     This hook updates the sumBalances ghost whenever any address balance is updated
-
-// */
-// hook Sstore _balances[KEY address user].delegatedVotingBalance uint72 votingBalance
-//     (uint72 old_votingBalance) STORAGE {
-//         sumDelegatedVotingPower = sumDelegatedVotingPower - to_mathint(old_votingBalance) + to_mathint(votingBalance);
-//     }
-
-// /**
-//     RULE 38
-
-//     Checks Method: All
-
-//     Invariant: 
-//     sum of all delegated voting power should be less than total supply of the token
-    
-// */
-// invariant delegatedVotingPowerLessThanSupply()
-//     sumDelegatedVotingPower <= totalSupply()
-
-/**
-
-    RULE 38
-
-    Checks Methods: delegate, delegateByType
-
-    delegateByType called to both VOTING_POWER AND PROPOSITION_POWER should have the same effect as delegate
-
-*/
-
-// rule compareDelegateMethods() {
-//     address account_delegate;
-//     address account_delegateByType;
-//     address delegatee_delegate;
-//     address delegatee_delegateByType;
-//     env e_delegate;
-//     env e_delegateByType;
-
-//     delegate(e_delegate, delegatee_delegate);
-//     delegateByType(e_delegateByType, delegatee_delegateByType, VOTING_POWER());
-//     delegateByType(e_delegateByType, delegatee_delegateByType, PROPOSITION_POWER());
-
-//     require e_delegate == e_delegateByType;
-//     require delegatee_delegateByType == delegatee_delegate;
-
-//     address votingDelegateAfterForDelegateMethod = getVotingDelegate(e_delegate.msg.sender);
-//     address votingDelegateAfterForDelegateByTypeMethod = getVotingDelegate(e_delegate.msg.sender);
-//     address propositionDelegateAfterForDelegateMethod = getPropositionDelegate(e_delegate.msg.sender);
-//     address propositionDelegateAfterForDelegateByTypeMethod = getPropositionDelegate(e_delegate.msg.sender);
-
-//     uint256 delegateeVotingPowerAfterForDelegateMethod = getPowerCurrent(delegatee_delegate, VOTING_POWER());
-//     uint256 delegateeVotingPowerAfterForDelegateByTypeMethod = getPowerCurrent(delegatee_delegateByType, VOTING_POWER());
-
-//     uint256 delegateePropositionPowerAfterForDelegateMethod = getPowerCurrent(delegatee_delegate, PROPOSITION_POWER());
-//     uint256 delegateePropositionPowerAfterForDelegateByTypeMethod = getPowerCurrent(delegatee_delegateByType, PROPOSITION_POWER());
-
-//     assert delegateePropositionPowerAfterForDelegateMethod == delegateePropositionPowerAfterForDelegateByTypeMethod;
-//     assert delegateeVotingPowerAfterForDelegateMethod == delegateeVotingPowerAfterForDelegateByTypeMethod;
-// }
 
 /**
 
@@ -2463,26 +2393,21 @@ rule delegationDoesNotChangeTotalSupply() {
    Checks methods: All
    Outcome: PASSES
    
-   Account can not have power greater than total supply
+   Account can not have voting power greater than total supply
 
 */
-invariant accountCanNotHavePowerGreaterThanTotalSupply(address account)
-    getDelegatedVotingBalance(account) <= normalize(totalSupply())
+invariant accountCanNotHaveVotingPowerGreaterThanTotalSupply(address account)
+    normalize(getDelegatedVotingBalance(account)) <= totalSupply()
 
-// rule accountCanNotHavePowerGreaterThanTotalSupply() {
-//     method f;
-//     env e;
-//     calldataarg args;
-//     address account;
+/**
 
-//     address votingBalanceBefore = getDelegatedVotingBalance(account);
-//     uint256 totalSupplyBefore = totalSupply();
+   RULE 41
+   
+   Checks methods: All
+   Outcome: PASSES
+   
+   Account can not have proposition power greater than total supply
 
-//     f(e, args);
-
-//     uint256 totalSupplyAfter = totalSupply();
-//     address votingBalanceAfter = getDelegatedVotingBalance(account);
-
-//     assert votingBalanceBefore <= totalSupplyBefore();
-//     assert votingBalanceAfter <= totalSupplyAfter();
-// }
+*/
+invariant accountCanNotHavePropositionPowerGreaterThanTotalSupply(address account)
+    normalize(getDelegatedPropositionBalance(account)) <= totalSupply()
