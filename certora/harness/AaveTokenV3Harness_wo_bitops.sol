@@ -62,9 +62,14 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     returns (uint256)
   {
     DelegationAwareBalance memory userState = _balances[user];
-    uint256 userOwnPower = uint8(userState.delegationState) & (uint8(delegationType) + 1) == 0
-      ? _balances[user].balance
-      : 0;
+    // uint256 userOwnPower = uint8(userState.delegationState) & (uint8(delegationType) + 1) == 0
+    //   ? _balances[user].balance
+    //   : 0;
+    uint256 userOwnPower;  
+    if (delegationType == GovernancePowerType.VOTING && (userState.delegationState == DelegationState.PROPOSITION_DELEGATED || userState.delegationState == DelegationState.NO_DELEGATION))
+      userOwnPower = _balances[user].balance;
+    if (delegationType == GovernancePowerType.PROPOSITION && (userState.delegationState == DelegationState.VOTING_DELEGATED || userState.delegationState == DelegationState.NO_DELEGATION))
+      userOwnPower = _balances[user].balance;
     uint256 userDelegatedPower = _getDelegatedPowerByType(userState, delegationType);
     return userOwnPower + userDelegatedPower;
   }
@@ -107,7 +112,6 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
         )
       )
     );
-
     require(delegator == ecrecover(digest, v, r, s), 'INVALID_SIGNATURE');
     unchecked {
       // Does not make sense to check because it's not realistic to reach uint256.max in nonce
@@ -206,7 +210,7 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     address from,
     address to,
     uint256 amount
-  ) internal override {
+  ) internal override {    
     if (from == to) {
       return;
     }
@@ -335,16 +339,38 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
   ) internal pure returns (DelegationAwareBalance memory) {
     if (willDelegate) {
       // Because GovernancePowerType starts from 0, we should add 1 first, then we apply bitwise OR
-      userState.delegationState = DelegationState(
-        uint8(userState.delegationState) | (uint8(delegationType) + 1)
-      );
+      // userState.delegationState = DelegationState(
+      //   uint8(userState.delegationState) | (uint8(delegationType) + 1)
+      // );
+      if (delegationType == GovernancePowerType.VOTING) {
+        if (userState.delegationState == DelegationState.PROPOSITION_DELEGATED) 
+          userState.delegationState = DelegationState.FULL_POWER_DELEGATED;
+        else if (userState.delegationState == DelegationState.NO_DELEGATION) 
+          userState.delegationState = DelegationState.VOTING_DELEGATED;
+      } else {
+        if (userState.delegationState == DelegationState.VOTING_DELEGATED) 
+          userState.delegationState = DelegationState.FULL_POWER_DELEGATED;
+        else if (userState.delegationState == DelegationState.NO_DELEGATION) 
+          userState.delegationState = DelegationState.PROPOSITION_DELEGATED;
+      }
     } else {
       // First bitwise NEGATION, ie was 01, after XOR with 11 will be 10,
       // then bitwise AND, which means it will keep only another delegation type if it exists
-      userState.delegationState = DelegationState(
-        uint8(userState.delegationState) &
-          ((uint8(delegationType) + 1) ^ uint8(DelegationState.FULL_POWER_DELEGATED))
-      );
+      // userState.delegationState = DelegationState(
+      //   uint8(userState.delegationState) &
+      //     ((uint8(delegationType) + 1) ^ uint8(DelegationState.FULL_POWER_DELEGATED))
+      // );
+      if (delegationType == GovernancePowerType.VOTING) {
+        if (userState.delegationState == DelegationState.FULL_POWER_DELEGATED) 
+          userState.delegationState = DelegationState.PROPOSITION_DELEGATED;
+        else if (userState.delegationState == DelegationState.VOTING_DELEGATED) 
+          userState.delegationState = DelegationState.NO_DELEGATION;
+      } else {
+        if (userState.delegationState == DelegationState.FULL_POWER_DELEGATED) 
+          userState.delegationState = DelegationState.VOTING_DELEGATED;
+        else if (userState.delegationState == DelegationState.PROPOSITION_DELEGATED)
+          userState.delegationState = DelegationState.NO_DELEGATION;
+      }
     }
     return userState;
   }
@@ -421,7 +447,6 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
     return _balances[user].delegatedVotingBalance;
    }
 
-
    function getDelegatingProposition(address user) view public returns (bool) {
     return _balances[user].delegationState == DelegationState.PROPOSITION_DELEGATED ||
         _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
@@ -440,8 +465,6 @@ contract AaveTokenV3 is BaseAaveTokenV2, IGovernancePowerDelegationToken {
    function getPropositionDelegate(address user) view public returns (address) {
     return _propositionDelegateeV2[user];
    }
-
-
 
    /**
      End of harness section
