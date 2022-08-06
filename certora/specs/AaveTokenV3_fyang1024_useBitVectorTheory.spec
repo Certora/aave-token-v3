@@ -95,3 +95,67 @@ rule undelegate_affects_self_and_delegatee_only(uint8 delegationType, address ot
     assert _delegateePower - normalize(selfBalance) == delegateePower_; // delegateePower decreased by selfBalance
     assert _otherPower == otherPower_; // otherPower does not change
 }
+
+/*
+    @Rule
+
+    @Description:
+        delegation of voting power should not affect proposition power, and vice versa.
+    
+    @Note:
+        This rule needs to be run with --settings -useBitVectorTheory flag, but the server threw
+        [java.lang.IllegalStateException: max size of bit vector 256 literals exceeded by 
+        115792089237316195423570985008687907853269984665640564039457584007913129639936],
+        hence this rule has not been verified yet.
+*/
+rule independency_of_delegation_types(uint8 delegationType) {
+    env e;
+    address self = e.msg.sender;
+    address other;
+    require other != 0 && other != self;
+    require delegationType == VOTING_POWER() || delegationType == PROPOSITION_POWER();
+
+    uint8 otherDelegationType;
+    if (delegationType == VOTING_POWER()) {
+        otherDelegationType = PROPOSITION_POWER();
+    } else {
+        otherDelegationType = VOTING_POWER();
+    }
+
+    uint256 _selfPower = getPowerCurrent(self, otherDelegationType);
+    uint256 _otherPower = getPowerCurrent(other, otherDelegationType);
+    address _delegatee;
+    if (otherDelegationType == VOTING_POWER()) {
+        _delegatee = getVotingDelegate(self);
+    } else {
+        _delegatee = getPropositionDelegate(self);
+    }
+    bool _delegating;
+    if (otherDelegationType == VOTING_POWER()) {
+        _delegating = getDelegatingVoting(self);
+    } else {
+        _delegating = getDelegatingProposition(self);
+    }
+
+    delegateByType(e, other, delegationType);
+
+    uint256 selfPower_ = getPowerCurrent(self, otherDelegationType);
+    uint256 otherPower_ = getPowerCurrent(other, otherDelegationType);
+    address delegatee_;
+    if (otherDelegationType == VOTING_POWER()) {
+        delegatee_ = getVotingDelegate(self);
+    } else {
+        delegatee_ = getPropositionDelegate(self);
+    }
+    bool delegating_;
+    if (otherDelegationType == VOTING_POWER()) {
+        delegating_ = getDelegatingVoting(self);
+    } else {
+        delegating_ = getDelegatingProposition(self);
+    }
+
+    assert _selfPower == selfPower_;
+    assert _otherPower == otherPower_;
+    assert _delegatee == delegatee_;
+    assert _delegating == delegating_;
+}
