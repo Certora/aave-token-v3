@@ -289,3 +289,24 @@ rule idempotency_of_delegation(address delegatee) {
     assert _delegateeVotingPower == delegateeVotingPower_;
     assert _delegateePropositionPower == delegateePropositionPower_;
 }
+
+/*
+    @Rule
+
+    @Description:
+        only transferring functions affect user's token balance
+*/
+rule only_transfer_affect_balance(address user, method f) {
+
+    uint256 _balance = balanceOf(user);
+
+    env e;
+    calldataarg args;
+    f(e, args);
+
+    uint256 balance_ = balanceOf(user);
+
+    assert _balance != balance_ =>
+        f.selector == transfer(address, uint256).selector || 
+        f.selector == transferFrom(address, address, uint256).selector;
+}
