@@ -6,7 +6,7 @@ fi
 certoraRun certora/harness/AaveTokenV3Harness.sol:AaveTokenV3 \
     --verify AaveTokenV3:certora/specs/setup.spec \
     $RULE \
-    --solc solc8.13 \
+    --solc solc \
     --optimistic_loop \
     --send_only \
     --cloud \

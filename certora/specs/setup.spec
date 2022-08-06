@@ -23,6 +23,8 @@ methods{
     getDelegatingVoting(address user) returns (bool) envfree
     getVotingDelegate(address user) returns (address) envfree
     getPropositionDelegate(address user) returns (address) envfree
+    getDelegatedPowerByType(address user, uint8 delegationType) returns (uint256) envfree
+    getDelegationState(address user) returns (uint8) envfree
 }
 
 /**
@@ -136,3 +138,99 @@ hook Sstore _balances[KEY address user].balance uint104 balance
 */
 invariant totalSupplyEqualsBalances()
     sumBalances == totalSupply()
+
+
+/**
+    The sum of all delegated voting balance must be less or equal to the totalSupply
+*/
+ghost mathint sumDelegatedVotingBalances {
+    init_state axiom sumDelegatedVotingBalances == 0;
+}
+
+
+hook Sstore _balances[KEY address user].delegatedVotingBalance uint72 new_delegated_voting_balance
+    (uint72 old_delegated_voting_balance) STORAGE {
+        sumDelegatedVotingBalances = sumDelegatedVotingBalances - to_mathint(old_delegated_voting_balance) + to_mathint(new_delegated_voting_balance);
+    }
+
+/**
+    Check that there is no way to increase or decrease the totalSupply
+*/
+rule nothingAffectsTotalSupply(env e, address user, method f){
+    uint256 totalSupplyBefore = totalSupply();
+
+    calldataarg args;
+    f(e, args);
+
+    assert totalSupply() == totalSupplyBefore;
+}
+
+/**
+    It is not possible to delegate to the 0 address, the only voting power it has is its balance
+*/
+invariant zeroAddressCanNotBeDelegatedTo()
+    getDelegatedVotingBalance(0) == balanceOf(0) && getDelegatedPropositionBalance(0) == balanceOf(0)
+
+
+/**
+   Alice can only change Bobs delegate through a valid meta transaction
+*/
+rule anotherUserCanOnlyChangeDelegateThroughMeta(env e, address user, method f) {
+    address votingDelegateBefore = getVotingDelegate(user);
+    address propositionDelegateAfter = getPropositionDelegate(user);
+
+    calldataarg args;
+
+    f(e, args);
+
+    // If the delegate changed it must through a meta tx (or it was the user themselves who updated it)
+    assert (
+        votingDelegateBefore != getVotingDelegate(user) ||
+        propositionDelegateAfter != getPropositionDelegate(user)
+    ) && (
+        f.selector != metaDelegateByType(address,address,uint8,uint256,uint8,bytes32,bytes32).selector &&
+        f.selector != metaDelegate(address,address,uint256,uint8,bytes32,bytes32).selector
+    )=> e.msg.sender == user;
+}
+
+/**
+    From the properties.md
+    If an account is not receiving delegation of power (one type) from anybody,
+    and that account is not delegating that power to anybody, the power of that account must be equal to its AAVE balance.
+*/
+rule nonDelegatingUserPowerEqBalance(env e, bool delegateToSelf){
+    enforceValidUserState(e.msg.sender);
+    
+    // User has no voting power being delegated to them
+    require getPowerCurrent(e.msg.sender, VOTING_POWER()) == 0 && 
+        getPowerCurrent(e.msg.sender, PROPOSITION_POWER()) == 0;
+
+    // User stops delegating both types of power
+    // either delegate to self directly or delegate to 0 address
+    delegate(e, delegateToSelf ? e.msg.sender : 0);
+    
+    // Power of that account must be equal to its AAVE balance.
+    assert getPowerCurrent(e.msg.sender, VOTING_POWER()) == getBalance(e.msg.sender) &&
+             getPowerCurrent(e.msg.sender, PROPOSITION_POWER()) == getBalance(e.msg.sender);
+}
+
+/**
+    This invariant check if the  result of `getPowerCurrent` is equal to the amount being delegated + the users balance (if they are not delegating)
+*/
+invariant correctnessOfgetPowerCurrent(address user)
+    getDelegatedPowerByType(user, VOTING_POWER()) // The amount delegated to this user
+        +
+    (getDelegatingVoting(user) == false ? getBalance(user) : 0) // if the user is self-delegating then the users balance should be added to the total
+        ==
+    getPowerCurrent(user, VOTING_POWER()) // is equal to the amount the method should return
+
+
+/**
+    The prover might use a starting state where `delegationState` is in an unreachable state
+    ex. `delegationState` set to `FULL_POWER_DELEGATED` but no delegate address set
+*/
+function enforceValidUserState(address user){
+    require getVotingDelegate(user) == 0 => getDelegatingVoting(user) == false;
+    require getPropositionDelegate(user) == 0 => getDelegatingProposition(user) == false;
+}
+
