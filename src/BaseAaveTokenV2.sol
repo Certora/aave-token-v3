@@ -2,9 +2,10 @@
 pragma solidity ^0.8.0;
 
 import {VersionedInitializable} from './utils/VersionedInitializable.sol';
+import {IERC20Permit} from 'openzeppelin-contracts/token/ERC20/extensions/IERC20Permit.sol';
 import {BaseAaveToken} from './BaseAaveToken.sol';
 
-abstract contract BaseAaveTokenV2 is BaseAaveToken, VersionedInitializable {
+abstract contract BaseAaveTokenV2 is BaseAaveToken, IERC20Permit, VersionedInitializable {
   /// @dev owner => next valid nonce to submit with permit()
   mapping(address => uint256) public _nonces;
 
@@ -13,6 +14,7 @@ abstract contract BaseAaveTokenV2 is BaseAaveToken, VersionedInitializable {
   uint256[3] private ______DEPRECATED_FROM_AAVE_V1;
   ///////// @dev END OF DEPRECATED from AaveToken v1  //////////////////////////
 
+  /// @inheritdoc IERC20Permit
   bytes32 public DOMAIN_SEPARATOR;
 
   ///////// @dev DEPRECATED from AaveToken v2  //////////////////////////
@@ -38,7 +40,6 @@ abstract contract BaseAaveTokenV2 is BaseAaveToken, VersionedInitializable {
    * @param s signature param
    * @param r signature param
    */
-
   function permit(
     address owner,
     address spender,
@@ -66,6 +67,11 @@ abstract contract BaseAaveTokenV2 is BaseAaveToken, VersionedInitializable {
       _nonces[owner] = currentValidNonce + 1;
     }
     _approve(owner, spender, value);
+  }
+
+  /// @inheritdoc IERC20Permit
+  function nonces(address owner) external view returns (uint256) {
+    return _nonces[owner];
   }
 
   /**
