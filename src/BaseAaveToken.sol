@@ -14,12 +14,11 @@ abstract contract BaseAaveToken is Context, IERC20Metadata {
     FULL_POWER_DELEGATED
   }
 
-  // reorder fields to make hooks syntax simpler
   struct DelegationAwareBalance {
-    DelegationState delegationState;
     uint104 balance;
     uint72 delegatedPropositionBalance;
     uint72 delegatedVotingBalance;
+    DelegationState delegationState;
   }
 
   mapping(address => DelegationAwareBalance) internal _balances;
