@@ -68,73 +68,73 @@ ghost mapping(address => uint104) balances {
 
 /*
 
-    This hook updates the sum of delegated and undelegated balances on each change of delegation mode.
+    This hook updates the sum of delegated and undelegated balances on each change of delegation state.
     If the user moves from not delegating to delegating, their balance is moved from undelegated to delegating,
     and etc.
 
 */
-hook Sstore _balances[KEY address user].delegationMode uint8 new_mode (uint8 old_mode) STORAGE {
-
-    bool willDelegateP = !DELEGATING_PROPOSITION(old_mode) && DELEGATING_PROPOSITION(new_mode);
-    bool wasDelegatingP = DELEGATING_PROPOSITION(old_mode) && !DELEGATING_PROPOSITION(new_mode);
-
+hook Sstore _balances[KEY address user].delegationState uint8 new_state (uint8 old_state) STORAGE {
+    
+    bool willDelegateP = !DELEGATING_PROPOSITION(old_state) && DELEGATING_PROPOSITION(new_state);
+    bool wasDelegatingP = DELEGATING_PROPOSITION(old_state) && !DELEGATING_PROPOSITION(new_state);
+ 
     // we cannot use if statements inside hooks, hence the ternary operator
     sumUndelegatedBalancesP = willDelegateP ? (sumUndelegatedBalancesP - balances[user]) : sumUndelegatedBalancesP;
     sumUndelegatedBalancesP = wasDelegatingP ? (sumUndelegatedBalancesP + balances[user]) : sumUndelegatedBalancesP;
     sumDelegatedBalancesP = willDelegateP ? (sumDelegatedBalancesP + balances[user]) : sumDelegatedBalancesP;
     sumDelegatedBalancesP = wasDelegatingP ? (sumDelegatedBalancesP - balances[user]) : sumDelegatedBalancesP;
+    
+    // change the delegating state only if a change is stored
 
-    // change the delegating mode only if a change is stored
-
-    isDelegatingProposition[user] = new_mode == old_mode
+    isDelegatingProposition[user] = new_state == old_state
         ? isDelegatingProposition[user]
-        : new_mode == PROPOSITION_DELEGATED() || new_mode == FULL_POWER_DELEGATED();
+        : new_state == PROPOSITION_DELEGATED() || new_state == FULL_POWER_DELEGATED();
 
-
-    bool willDelegateV = !DELEGATING_VOTING(old_mode) && DELEGATING_VOTING(new_mode);
-    bool wasDelegatingV = DELEGATING_VOTING(old_mode) && !DELEGATING_VOTING(new_mode);
+    
+    bool willDelegateV = !DELEGATING_VOTING(old_state) && DELEGATING_VOTING(new_state);
+    bool wasDelegatingV = DELEGATING_VOTING(old_state) && !DELEGATING_VOTING(new_state);
     sumUndelegatedBalancesV = willDelegateV ? (sumUndelegatedBalancesV - balances[user]) : sumUndelegatedBalancesV;
     sumUndelegatedBalancesV = wasDelegatingV ? (sumUndelegatedBalancesV + balances[user]) : sumUndelegatedBalancesV;
     sumDelegatedBalancesV = willDelegateV ? (sumDelegatedBalancesV + balances[user]) : sumDelegatedBalancesV;
     sumDelegatedBalancesV = wasDelegatingV ? (sumDelegatedBalancesV - balances[user]) : sumDelegatedBalancesV;
+    
+    // change the delegating state only if a change is stored
 
-    // change the delegating mode only if a change is stored
-
-    isDelegatingVoting[user] = new_mode == old_mode
+    isDelegatingVoting[user] = new_state == old_state
         ? isDelegatingVoting[user]
-        : new_mode == VOTING_DELEGATED() || new_mode == FULL_POWER_DELEGATED();
+        : new_state == VOTING_DELEGATED() || new_state == FULL_POWER_DELEGATED();
 }
 
 
 /*
 
     This hook updates the sum of delegated and undelegated balances on each change of user balance.
-    Depending on the delegation mode, either the delegated or the undelegated balance get updated.
+    Depending on the delegation state, either the delegated or the undelegated balance get updated.
 
 */
 hook Sstore _balances[KEY address user].balance uint104 balance (uint104 old_balance) STORAGE {
     balances[user] = balances[user] - old_balance + balance;
     // we cannot use if statements inside hooks, hence the ternary operator
-    sumDelegatedBalancesV = isDelegatingVoting[user]
+    sumDelegatedBalancesV = isDelegatingVoting[user] 
         ? sumDelegatedBalancesV + to_mathint(balance) - to_mathint(old_balance)
         : sumDelegatedBalancesV;
-    sumUndelegatedBalancesV = !isDelegatingVoting[user]
+    sumUndelegatedBalancesV = !isDelegatingVoting[user] 
         ? sumUndelegatedBalancesV + to_mathint(balance) - to_mathint(old_balance)
         : sumUndelegatedBalancesV;
-    sumDelegatedBalancesP = isDelegatingProposition[user]
+    sumDelegatedBalancesP = isDelegatingProposition[user] 
         ? sumDelegatedBalancesP + to_mathint(balance) - to_mathint(old_balance)
         : sumDelegatedBalancesP;
-    sumUndelegatedBalancesP = !isDelegatingProposition[user]
+    sumUndelegatedBalancesP = !isDelegatingProposition[user] 
         ? sumUndelegatedBalancesP + to_mathint(balance) - to_mathint(old_balance)
         : sumUndelegatedBalancesP;
 
 }
 
-// user's delegation mode is always valid, i.e. one of the 4 legitimate modes
+// user's delegation state is always valid, i.e. one of the 4 legitimate states
 // (NO_DELEGATION, VOTING_DELEGATED, PROPOSITION_DELEGATED, FULL_POWER_DELEGATED)
-// passes
-invariant delegationModeValid(address user)
-    validDelegationMode(user)
+// passes 
+invariant delegationStateValid(address user)
+    validDelegationState(user)
 
 
 /*
@@ -156,7 +156,7 @@ invariant delegateCorrectness(address user)
     ((getPropositionDelegate(user) == user || getPropositionDelegate(user) == 0) <=> !getDelegatingProposition(user))
     {
         preserved {
-            requireInvariant delegationModeValid(user);
+            requireInvariant delegationStateValid(user);
         }
     }
 
@@ -192,7 +192,7 @@ invariant sumOfPBalancesCorrectness() sumDelegatedBalancesP + sumUndelegatedBala
     @Rule
 
     @Description:
-       Transfers don't change voting delegation mode
+       Transfers don't change voting delegation state
 
     @Notes:
 
@@ -200,26 +200,26 @@ invariant sumOfPBalancesCorrectness() sumDelegatedBalancesP + sumUndelegatedBala
     @Link:
 
 */
-rule transferDoesntChangeDelegationMode() {
+rule transferDoesntChangeDelegationState() {
     env e;
     address from; address to; address charlie;
     require (charlie != from && charlie != to);
     uint amount;
 
-    uint8 modeFromBefore = getDelegationMode(from);
-    uint8 modeToBefore = getDelegationMode(to);
-    uint8 modeCharlieBefore = getDelegationMode(charlie);
-    require modeFromBefore <= FULL_POWER_DELEGATED() && modeToBefore <= FULL_POWER_DELEGATED();
+    uint8 stateFromBefore = getDelegationState(from);
+    uint8 stateToBefore = getDelegationState(to);
+    uint8 stateCharlieBefore = getDelegationState(charlie);
+    require stateFromBefore <= FULL_POWER_DELEGATED() && stateToBefore <= FULL_POWER_DELEGATED();
     bool testFromBefore = isDelegatingVoting[from];
     bool testToBefore = isDelegatingVoting[to];
 
     transferFrom(e, from, to, amount);
 
-    uint8 modeFromAfter = getDelegationMode(from);
-    uint8 modeToAfter = getDelegationMode(to);
+    uint8 stateFromAfter = getDelegationState(from);
+    uint8 stateToAfter = getDelegationState(to);
     bool testFromAfter = isDelegatingVoting[from];
     bool testToAfter = isDelegatingVoting[to];
 
     assert testFromBefore == testFromAfter && testToBefore == testToAfter;
-    assert getDelegationMode(charlie) == modeCharlieBefore;
+    assert getDelegationState(charlie) == stateCharlieBefore;
 }
