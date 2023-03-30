@@ -1,10 +1,10 @@
 /*
     This is a specification file for the verification of delegation invariants
-    of AaveTokenV3.sol smart contract using the Certora prover. 
+    of AaveTokenV3.sol smart contract using the Certora prover.
     For more information, visit: https://www.certora.com/
 
     This file is run with scripts/verifyGeneral.sh
-    On a version with some minimal code modifications 
+    On a version with some minimal code modifications
     AaveTokenV3HarnessStorage.sol
 
     Sanity check results: https://prover.certora.com/output/67509/8cee7c95432ede6b3f9f/?anonymousKey=78d297585a2b2edc38f6c513e0ce12df10e47b82
@@ -73,31 +73,31 @@ ghost mapping(address => uint104) balances {
     and etc.
 
 */
-hook Sstore _balances[KEY address user].delegationState uint8 new_state (uint8 old_state) STORAGE {
-    
+hook Sstore _balances[KEY address user].delegationMode uint8 new_state (uint8 old_state) STORAGE {
+
     bool willDelegateP = !DELEGATING_PROPOSITION(old_state) && DELEGATING_PROPOSITION(new_state);
     bool wasDelegatingP = DELEGATING_PROPOSITION(old_state) && !DELEGATING_PROPOSITION(new_state);
- 
+
     // we cannot use if statements inside hooks, hence the ternary operator
     sumUndelegatedBalancesP = willDelegateP ? (sumUndelegatedBalancesP - balances[user]) : sumUndelegatedBalancesP;
     sumUndelegatedBalancesP = wasDelegatingP ? (sumUndelegatedBalancesP + balances[user]) : sumUndelegatedBalancesP;
     sumDelegatedBalancesP = willDelegateP ? (sumDelegatedBalancesP + balances[user]) : sumDelegatedBalancesP;
     sumDelegatedBalancesP = wasDelegatingP ? (sumDelegatedBalancesP - balances[user]) : sumDelegatedBalancesP;
-    
+
     // change the delegating state only if a change is stored
 
     isDelegatingProposition[user] = new_state == old_state
         ? isDelegatingProposition[user]
         : new_state == PROPOSITION_DELEGATED() || new_state == FULL_POWER_DELEGATED();
 
-    
+
     bool willDelegateV = !DELEGATING_VOTING(old_state) && DELEGATING_VOTING(new_state);
     bool wasDelegatingV = DELEGATING_VOTING(old_state) && !DELEGATING_VOTING(new_state);
     sumUndelegatedBalancesV = willDelegateV ? (sumUndelegatedBalancesV - balances[user]) : sumUndelegatedBalancesV;
     sumUndelegatedBalancesV = wasDelegatingV ? (sumUndelegatedBalancesV + balances[user]) : sumUndelegatedBalancesV;
     sumDelegatedBalancesV = willDelegateV ? (sumDelegatedBalancesV + balances[user]) : sumDelegatedBalancesV;
     sumDelegatedBalancesV = wasDelegatingV ? (sumDelegatedBalancesV - balances[user]) : sumDelegatedBalancesV;
-    
+
     // change the delegating state only if a change is stored
 
     isDelegatingVoting[user] = new_state == old_state
@@ -115,16 +115,16 @@ hook Sstore _balances[KEY address user].delegationState uint8 new_state (uint8 o
 hook Sstore _balances[KEY address user].balance uint104 balance (uint104 old_balance) STORAGE {
     balances[user] = balances[user] - old_balance + balance;
     // we cannot use if statements inside hooks, hence the ternary operator
-    sumDelegatedBalancesV = isDelegatingVoting[user] 
+    sumDelegatedBalancesV = isDelegatingVoting[user]
         ? sumDelegatedBalancesV + to_mathint(balance) - to_mathint(old_balance)
         : sumDelegatedBalancesV;
-    sumUndelegatedBalancesV = !isDelegatingVoting[user] 
+    sumUndelegatedBalancesV = !isDelegatingVoting[user]
         ? sumUndelegatedBalancesV + to_mathint(balance) - to_mathint(old_balance)
         : sumUndelegatedBalancesV;
-    sumDelegatedBalancesP = isDelegatingProposition[user] 
+    sumDelegatedBalancesP = isDelegatingProposition[user]
         ? sumDelegatedBalancesP + to_mathint(balance) - to_mathint(old_balance)
         : sumDelegatedBalancesP;
-    sumUndelegatedBalancesP = !isDelegatingProposition[user] 
+    sumUndelegatedBalancesP = !isDelegatingProposition[user]
         ? sumUndelegatedBalancesP + to_mathint(balance) - to_mathint(old_balance)
         : sumUndelegatedBalancesP;
 
@@ -132,7 +132,7 @@ hook Sstore _balances[KEY address user].balance uint104 balance (uint104 old_bal
 
 // user's delegation state is always valid, i.e. one of the 4 legitimate states
 // (NO_DELEGATION, VOTING_DELEGATED, PROPOSITION_DELEGATED, FULL_POWER_DELEGATED)
-// passes 
+// passes
 invariant delegationStateValid(address user)
     validDelegationState(user)
 
