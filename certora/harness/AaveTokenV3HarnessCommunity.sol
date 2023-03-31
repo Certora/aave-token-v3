@@ -26,14 +26,14 @@ contract AaveTokenV3Harness is AaveTokenV3 {
 
   function getDelegatingProposition(address user) public view returns (bool) {
     return
-      _balances[user].delegationMode == DelegationMode.PROPOSITION_DELEGATED ||
-      _balances[user].delegationMode == DelegationMode.FULL_POWER_DELEGATED;
+      _balances[user].delegationMode == uint8(DelegationMode.PROPOSITION_DELEGATED) ||
+      _balances[user].delegationMode == uint8(DelegationMode.FULL_POWER_DELEGATED);
   }
 
   function getDelegatingVoting(address user) public view returns (bool) {
     return
-      _balances[user].delegationMode == DelegationMode.VOTING_DELEGATED ||
-      _balances[user].delegationMode == DelegationMode.FULL_POWER_DELEGATED;
+      _balances[user].delegationMode == uint8(DelegationMode.VOTING_DELEGATED) ||
+      _balances[user].delegationMode == uint8(DelegationMode.FULL_POWER_DELEGATED);
   }
 
   function getVotingDelegate(address user) public view returns (address) {
