@@ -68,7 +68,7 @@ ghost mapping(address => uint104) balances {
 
 /*
 
-    This hook updates the sum of delegated and undelegated balances on each change of delegation state.
+    This hook updates the sum of delegated and undelegated balances on each change of delegation mode.
     If the user moves from not delegating to delegating, their balance is moved from undelegated to delegating,
     and etc.
 

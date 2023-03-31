@@ -29,17 +29,17 @@ contract AaveTokenV3Harness is AaveTokenV3 {
   }
 
   function getDelegatingProposition(address user) public view returns (bool) {
-    uint8 mode = _balances[user].delegationMode;
+    DelegationMode mode = _balances[user].delegationMode;
     return
-      mode == uint8(DelegationMode.PROPOSITION_DELEGATED) ||
-      mode == uint8(DelegationMode.FULL_POWER_DELEGATED);
+      mode == DelegationMode.PROPOSITION_DELEGATED ||
+      mode == DelegationMode.FULL_POWER_DELEGATED;
   }
 
   function getDelegatingVoting(address user) public view returns (bool) {
-    uint8 mode = _balances[user].delegationMode;
+    DelegationMode mode = _balances[user].delegationMode;
     return
-      mode == uint8(DelegationMode.VOTING_DELEGATED) ||
-      mode == uint8(DelegationMode.FULL_POWER_DELEGATED);
+      mode == DelegationMode.VOTING_DELEGATED ||
+      mode == DelegationMode.FULL_POWER_DELEGATED;
   }
 
   function getVotingDelegate(address user) public view returns (address) {
@@ -51,6 +51,6 @@ contract AaveTokenV3Harness is AaveTokenV3 {
   }
 
   function getDelegationState(address user) public view returns (uint8) {
-    return _balances[user].delegationMode;
+    return uint8(_balances[user].delegationMode);
   }
 }
