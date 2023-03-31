@@ -8,7 +8,7 @@
 
 pragma solidity ^0.8.0;
 
-import {AaveTokenV3} from '../../src/AaveTokenV3.sol';
+import {AaveTokenV3} from '../munged/src/AaveTokenV3.sol';
 
 contract AaveTokenV3Harness is AaveTokenV3 {
   function getBalance(address user) public view returns (uint104) {
@@ -25,14 +25,14 @@ contract AaveTokenV3Harness is AaveTokenV3 {
 
   function getDelegatingProposition(address user) public view returns (bool) {
     return
-      _balances[user].delegationState == DelegationState.PROPOSITION_DELEGATED ||
-      _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
+      _balances[user].delegationState == uint8(DelegationState.PROPOSITION_DELEGATED) ||
+      _balances[user].delegationState == uint8(DelegationState.FULL_POWER_DELEGATED);
   }
 
   function getDelegatingVoting(address user) public view returns (bool) {
     return
-      _balances[user].delegationState == DelegationState.VOTING_DELEGATED ||
-      _balances[user].delegationState == DelegationState.FULL_POWER_DELEGATED;
+      _balances[user].delegationState == uint8(DelegationState.VOTING_DELEGATED) ||
+      _balances[user].delegationState == uint8(DelegationState.FULL_POWER_DELEGATED);
   }
 
   function getVotingDelegate(address user) public view returns (address) {
@@ -43,7 +43,7 @@ contract AaveTokenV3Harness is AaveTokenV3 {
     return _propositionDelegateeV2[user];
   }
 
-  function getDelegationState(address user) public view returns (DelegationState) {
+  function getDelegationState(address user) public view returns (uint8) {
     return _balances[user].delegationState;
   }
 
