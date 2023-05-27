@@ -2,31 +2,31 @@
 ///////////////////// Governor.sol base definitions //////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 
-using ERC20VotesHarness as erc20votes
+using ERC20VotesHarness as erc20votes;
 
 methods {
-    proposalSnapshot(uint256) returns uint256 envfree // matches proposalVoteStart
-    proposalDeadline(uint256) returns uint256 envfree // matches proposalVoteEnd
-    hashProposal(address[],uint256[],bytes[],bytes32) returns uint256 envfree
-    isExecuted(uint256) returns bool envfree
-    isCanceled(uint256) returns bool envfree
-    execute(address[], uint256[], bytes[], bytes32) returns uint256
-    hasVoted(uint256, address) returns bool
-    castVote(uint256, uint8) returns uint256
-    updateQuorumNumerator(uint256)
-    queue(address[], uint256[], bytes[], bytes32) returns uint256
+    function proposalSnapshot(uint256) external returns uint256 envfree; // matches proposalVoteStart
+    function proposalDeadline(uint256) external returns uint256 envfree; // matches proposalVoteEnd
+    function hashProposal(address[],uint256[],bytes[],bytes32) external returns uint256 envfree;
+    function isExecuted(uint256) external returns bool envfree;
+    function isCanceled(uint256) external returns bool envfree;
+    function execute(address[], uint256[], bytes[], bytes32) external returns uint256;
+    function hasVoted(uint256, address) external returns bool;
+    function castVote(uint256, uint8) external returns uint256;
+    function updateQuorumNumerator(uint256) external;
+    function queue(address[], uint256[], bytes[], bytes32) external returns uint256;
 
     // internal functions made public in harness:
-    _quorumReached(uint256) returns bool
-    _voteSucceeded(uint256) returns bool envfree
+    function _quorumReached(uint256) external returns bool;
+    function _voteSucceeded(uint256) external returns bool envfree;
 
     // function summarization
-    proposalThreshold() returns uint256 envfree
+    function proposalThreshold() external returns uint256 envfree;
 
-    getVotes(address, uint256) returns uint256 => DISPATCHER(true)
+    function _.getVotes(address, uint256) external returns uint256 => DISPATCHER(true);
 
-    getPastTotalSupply(uint256 t) returns uint256      => PER_CALLEE_CONSTANT
-    getPastVotes(address a, uint256 t) returns uint256 => PER_CALLEE_CONSTANT
+    function _.getPastTotalSupply(uint256 t) returns uint256      => PER_CALLEE_CONSTANT;
+    function _.getPastVotes(address a, uint256 t) returns uint256 => PER_CALLEE_CONSTANT;
 
     //scheduleBatch(address[],uint256[],bytes[],bytes32,bytes32,uint256) => DISPATCHER(true)
     //executeBatch(address[], uint256[], bytes[], bytes32, bytes32) => DISPATCHER(true)
@@ -48,19 +48,19 @@ definition proposalCreated(uint256 pId) returns bool = proposalSnapshot(pId) > 0
 function helperFunctionsWithRevert(uint256 proposalId, method f, env e) {
     address[] targets; uint256[] values; bytes[] calldatas; string reason; bytes32 descriptionHash;
     uint8 support; uint8 v; bytes32 r; bytes32 s;
-	if (f.selector == propose(address[], uint256[], bytes[], string).selector) {
+	if (f.selector == sig:propose(address[], uint256[], bytes[], string).selector) {
 		uint256 result = propose@withrevert(e, targets, values, calldatas, reason);
         require(result == proposalId);
-	} else if (f.selector == execute(address[], uint256[], bytes[], bytes32).selector) {
+	} else if (f.selector == sig:execute(address[], uint256[], bytes[], bytes32).selector) {
 		uint256 result = execute@withrevert(e, targets, values, calldatas, descriptionHash);
         require(result == proposalId);
-	} else if (f.selector == castVote(uint256, uint8).selector) {
+	} else if (f.selector == sig:castVote(uint256, uint8).selector) {
 		castVote@withrevert(e, proposalId, support);
-	} else if  (f.selector == castVoteWithReason(uint256, uint8, string).selector) {
+	} else if  (f.selector == sig:castVoteWithReason(uint256, uint8, string).selector) {
         castVoteWithReason@withrevert(e, proposalId, support, reason);
-	} else if (f.selector == castVoteBySig(uint256, uint8,uint8, bytes32, bytes32).selector) {
+	} else if (f.selector == sig:castVoteBySig(uint256, uint8,uint8, bytes32, bytes32).selector) {
 		castVoteBySig@withrevert(e, proposalId, support, v, r, s);
-    } else if (f.selector == queue(address[], uint256[], bytes[], bytes32).selector) {
+    } else if (f.selector == sig:queue(address[], uint256[], bytes[], bytes32).selector) {
         queue@withrevert(e, targets, values, calldatas, descriptionHash);
 	} else {
         calldataarg args;
@@ -278,10 +278,10 @@ rule noExecuteOrCancelBeforeDeadline(uint256 pId, method f){
  // change it, and that it will always change it.
 rule allFunctionsRevertIfExecuted(method f) filtered { f ->
     !f.isView && !f.isFallback
-      && f.selector != updateTimelock(address).selector
-      && f.selector != updateQuorumNumerator(uint256).selector
-      && f.selector != queue(address[],uint256[],bytes[],bytes32).selector
-      && f.selector != relay(address,uint256,bytes).selector
+      && f.selector != sig:updateTimelock(address).selector
+      && f.selector != sig:updateQuorumNumerator(uint256).selector
+      && f.selector != sig:queue(address[],uint256[],bytes[],bytes32).selector
+      && f.selector != sig:relay(address,uint256,bytes).selector
       && f.selector != 0xb9a61961 // __acceptAdmin()
 } {
     env e; calldataarg args;
@@ -300,10 +300,10 @@ rule allFunctionsRevertIfExecuted(method f) filtered { f ->
  */
 rule allFunctionsRevertIfCanceled(method f) filtered {
     f -> !f.isView && !f.isFallback
-      && f.selector != updateTimelock(address).selector
-      && f.selector != updateQuorumNumerator(uint256).selector
-      && f.selector != queue(address[],uint256[],bytes[],bytes32).selector
-      && f.selector != relay(address,uint256,bytes).selector
+      && f.selector != sig:updateTimelock(address).selector
+      && f.selector != sig:updateQuorumNumerator(uint256).selector
+      && f.selector != sig:queue(address[],uint256[],bytes[],bytes32).selector
+      && f.selector != sig:relay(address,uint256,bytes).selector
       && f.selector != 0xb9a61961 // __acceptAdmin()
 } {
     env e; calldataarg args;
@@ -329,6 +329,6 @@ rule executedOnlyAfterExecuteFunc(address[] targets, uint256[] values, bytes[] c
     helperFunctionsWithRevert(pId, f, e);
 
     bool executedAfter = isExecuted(pId);
-    assert(executedAfter != executedBefore => f.selector == execute(address[], uint256[], bytes[], bytes32).selector, "isExecuted only changes in the execute method");
+    assert(executedAfter != executedBefore => f.selector == sig:execute(address[], uint256[], bytes[], bytes32).selector, "isExecuted only changes in the execute method");
 }
 

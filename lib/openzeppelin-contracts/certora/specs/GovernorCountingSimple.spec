@@ -1,21 +1,21 @@
-import "GovernorBase.spec"
+import "GovernorBase.spec";
 
-using ERC20VotesHarness as erc20votes
+using ERC20VotesHarness as erc20votes;
 
 methods {
-    ghost_sum_vote_power_by_id(uint256) returns uint256 envfree
+    function ghost_sum_vote_power_by_id(uint256) external returns uint256 envfree;
 
-    quorum(uint256) returns uint256
-    proposalVotes(uint256) returns (uint256, uint256, uint256) envfree
+    function quorum(uint256) external returns uint256;
+    function proposalVotes(uint256) external returns (uint256, uint256, uint256) envfree;
 
-    quorumNumerator() returns uint256
-    _executor() returns address
+    function quorumNumerator() external returns uint256;
+    function _executor() external returns address;
 
-    erc20votes._getPastVotes(address, uint256) returns uint256
+    function erc20votes._getPastVotes(address, uint256) external returns uint256;
 
-    getExecutor() returns address
+    function getExecutor() external returns address;
 
-    timelock() returns address
+    function timelock() external returns address;
 }
 
 
