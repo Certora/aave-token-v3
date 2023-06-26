@@ -33,7 +33,7 @@ methods {
     getDelegatingVoting(address user) returns (bool) envfree
     getVotingDelegate(address user) returns (address) envfree
     getPropositionDelegate(address user) returns (address) envfree
-    getDelegationState(address user) returns (uint8) envfree
+    getDelegationMode(address user) returns (uint8) envfree
 }
 
 definition VOTING_POWER() returns uint8 = 0;
@@ -68,8 +68,8 @@ function normalize(uint256 amount) returns uint256 {
     return to_uint256(amount / DELEGATED_POWER_DIVIDER() * DELEGATED_POWER_DIVIDER());
 }
 
-function validDelegationState(address user) returns bool {
-    return getDelegationState(user) < 4;
+function validDelegationMode(address user) returns bool {
+    return getDelegationMode(user) < 4;
 }
 
 function validAmount(uint256 amt) returns bool {

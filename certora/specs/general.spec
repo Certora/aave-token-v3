@@ -73,7 +73,7 @@ ghost mapping(address => uint104) balances {
     and etc.
 
 */
-hook Sstore _balances[KEY address user].delegationState uint8 new_state (uint8 old_state) STORAGE {
+hook Sstore _balances[KEY address user].delegationMode uint8 new_state (uint8 old_state) STORAGE {
     
     bool willDelegateP = !DELEGATING_PROPOSITION(old_state) && DELEGATING_PROPOSITION(new_state);
     bool wasDelegatingP = DELEGATING_PROPOSITION(old_state) && !DELEGATING_PROPOSITION(new_state);
@@ -133,8 +133,8 @@ hook Sstore _balances[KEY address user].balance uint104 balance (uint104 old_bal
 // user's delegation state is always valid, i.e. one of the 4 legitimate states
 // (NO_DELEGATION, VOTING_DELEGATED, PROPOSITION_DELEGATED, FULL_POWER_DELEGATED)
 // passes 
-invariant delegationStateValid(address user)
-    validDelegationState(user)
+invariant delegationModeValid(address user)
+    validDelegationMode(user)
 
 
 /*
@@ -156,7 +156,7 @@ invariant delegateCorrectness(address user)
     ((getPropositionDelegate(user) == user || getPropositionDelegate(user) == 0) <=> !getDelegatingProposition(user))
     {
         preserved {
-            requireInvariant delegationStateValid(user);
+            requireInvariant delegationModeValid(user);
         }
     }
 
@@ -206,20 +206,20 @@ rule transferDoesntChangeDelegationState() {
     require (charlie != from && charlie != to);
     uint amount;
 
-    uint8 stateFromBefore = getDelegationState(from);
-    uint8 stateToBefore = getDelegationState(to);
-    uint8 stateCharlieBefore = getDelegationState(charlie);
+    uint8 stateFromBefore = getDelegationMode(from);
+    uint8 stateToBefore = getDelegationMode(to);
+    uint8 stateCharlieBefore = getDelegationMode(charlie);
     require stateFromBefore <= FULL_POWER_DELEGATED() && stateToBefore <= FULL_POWER_DELEGATED();
     bool testFromBefore = isDelegatingVoting[from];
     bool testToBefore = isDelegatingVoting[to];
 
     transferFrom(e, from, to, amount);
 
-    uint8 stateFromAfter = getDelegationState(from);
-    uint8 stateToAfter = getDelegationState(to);
+    uint8 stateFromAfter = getDelegationMode(from);
+    uint8 stateToAfter = getDelegationMode(to);
     bool testFromAfter = isDelegatingVoting[from];
     bool testToAfter = isDelegatingVoting[to];
 
     assert testFromBefore == testFromAfter && testToBefore == testToAfter;
-    assert getDelegationState(charlie) == stateCharlieBefore;
+    assert getDelegationMode(charlie) == stateCharlieBefore;
 }

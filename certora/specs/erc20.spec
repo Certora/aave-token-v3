@@ -131,6 +131,8 @@ rule transferCorrect(address to, uint256 amount) {
     uint256 fromBalanceBefore = balanceOf(e.msg.sender);
     uint256 toBalanceBefore = balanceOf(to);
     require fromBalanceBefore + toBalanceBefore < AAVE_MAX_SUPPLY() / 100;
+    //    require getDelegationMode(e.msg.sender) <= 3;
+    //require getDelegationMode(to) <= 3;
     
     // proven elsewhere
     address v_delegateTo = getVotingDelegate(to);
@@ -150,9 +152,11 @@ rule transferCorrect(address to, uint256 amount) {
     require dvbFrom >= balanceOf(e.msg.sender) / DELEGATED_POWER_DIVIDER();
     require pvbFrom >= balanceOf(e.msg.sender) / DELEGATED_POWER_DIVIDER();
 
-    require validDelegationState(e.msg.sender) && validDelegationState(to);
+    require validDelegationMode(e.msg.sender) && validDelegationMode(to);
     require ! ( (getDelegatingVoting(to) && v_delegateTo == to) ||
                 (getDelegatingProposition(to) && p_delegateTo == to));
+    require validDelegationMode(p_delegateFrom) && validDelegationMode(p_delegateTo);
+    require validDelegationMode(v_delegateFrom) && validDelegationMode(v_delegateTo);
     
     // to not overcomplicate the constraints on dvbTo and dvbFrom
     require v_delegateFrom != v_delegateTo && p_delegateFrom != p_delegateTo;
@@ -167,7 +171,16 @@ rule transferCorrect(address to, uint256 amount) {
             assert balanceOf(to) == toBalanceBefore + amount;
         }
     } else {
-        assert amount > fromBalanceBefore || to == 0;
+        uint256 POWER_SCALE_FACTOR = 10000000000;
+        uint256 fromBalanceAfter = fromBalanceBefore - amount;
+        uint256 toBalanceAfter = toBalanceBefore + amount;
+       
+        assert amount > fromBalanceBefore || to == 0 //||
+            //        fromBalanceBefore / POWER_SCALE_FACTOR > 2^72-1 ||
+            //            fromBalanceAfter / POWER_SCALE_FACTOR > 2^72-1 ||
+            //toBalanceBefore / POWER_SCALE_FACTOR > 2^72-1 ||
+            //toBalanceAfter / POWER_SCALE_FACTOR > 2^72-1
+            ;
     }
 }
 
@@ -397,6 +410,7 @@ rule TransferSumOfFromAndToBalancesStaySame(address to, uint256 amount) {
     env e;
     mathint sum = balanceOf(e.msg.sender) + balanceOf(to);
     require sum < max_uint256;
+    //require sum < 100;
     transfer(e, to, amount); 
     assert balanceOf(e.msg.sender) + balanceOf(to) == sum;
 }
