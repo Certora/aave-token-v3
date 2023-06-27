@@ -10,7 +10,7 @@
     Sanity check results: https://prover.certora.com/output/67509/8cee7c95432ede6b3f9f/?anonymousKey=78d297585a2b2edc38f6c513e0ce12df10e47b82
 */
 
-import "base.spec"
+import "base.spec";
 
 
 /**
@@ -55,7 +55,7 @@ ghost mathint sumUndelegatedBalancesP {
 }
 
 // token balances of each address
-ghost mapping(address => uint104) balances {
+ghost mapping(address => mathint) balances {
     init_state axiom forall address a. balances[a] == 0;
 }
 
@@ -73,7 +73,7 @@ ghost mapping(address => uint104) balances {
     and etc.
 
 */
-hook Sstore _balances[KEY address user].delegationMode uint8 new_state (uint8 old_state) STORAGE {
+hook Sstore _balances[KEY address user].delegationMode AaveTokenV3Harness.DelegationMode new_state (AaveTokenV3Harness.DelegationMode old_state) STORAGE {
     
     bool willDelegateP = !DELEGATING_PROPOSITION(old_state) && DELEGATING_PROPOSITION(new_state);
     bool wasDelegatingP = DELEGATING_PROPOSITION(old_state) && !DELEGATING_PROPOSITION(new_state);
@@ -130,13 +130,6 @@ hook Sstore _balances[KEY address user].balance uint104 balance (uint104 old_bal
 
 }
 
-// user's delegation state is always valid, i.e. one of the 4 legitimate states
-// (NO_DELEGATION, VOTING_DELEGATED, PROPOSITION_DELEGATED, FULL_POWER_DELEGATED)
-// passes 
-invariant delegationModeValid(address user)
-    validDelegationMode(user)
-
-
 /*
     @Rule
 
@@ -153,12 +146,7 @@ invariant delegationModeValid(address user)
 invariant delegateCorrectness(address user)
     ((getVotingDelegate(user) == user || getVotingDelegate(user) == 0) <=> !getDelegatingVoting(user))
     &&
-    ((getPropositionDelegate(user) == user || getPropositionDelegate(user) == 0) <=> !getDelegatingProposition(user))
-    {
-        preserved {
-            requireInvariant delegationModeValid(user);
-        }
-    }
+    ((getPropositionDelegate(user) == user || getPropositionDelegate(user) == 0) <=> !getDelegatingProposition(user));
 
 /*
     @Rule
@@ -172,7 +160,7 @@ invariant delegateCorrectness(address user)
     @Link:
 
 */
-invariant sumOfVBalancesCorrectness() sumDelegatedBalancesV + sumUndelegatedBalancesV == totalSupply()
+invariant sumOfVBalancesCorrectness() sumDelegatedBalancesV + sumUndelegatedBalancesV == to_mathint(totalSupply());
 
 /*
     @Rule
@@ -186,7 +174,7 @@ invariant sumOfVBalancesCorrectness() sumDelegatedBalancesV + sumUndelegatedBala
     @Link:
 
 */
-invariant sumOfPBalancesCorrectness() sumDelegatedBalancesP + sumUndelegatedBalancesP == totalSupply()
+invariant sumOfPBalancesCorrectness() sumDelegatedBalancesP + sumUndelegatedBalancesP == to_mathint(totalSupply());
 
 /*
     @Rule
@@ -200,23 +188,23 @@ invariant sumOfPBalancesCorrectness() sumDelegatedBalancesP + sumUndelegatedBala
     @Link:
 
 */
-rule transferDoesntChangeDelegationState() {
+rule transferDoesntChangeDelegationMode() {
     env e;
     address from; address to; address charlie;
     require (charlie != from && charlie != to);
     uint amount;
 
-    uint8 stateFromBefore = getDelegationMode(from);
-    uint8 stateToBefore = getDelegationMode(to);
-    uint8 stateCharlieBefore = getDelegationMode(charlie);
-    require stateFromBefore <= FULL_POWER_DELEGATED() && stateToBefore <= FULL_POWER_DELEGATED();
+    AaveTokenV3Harness.DelegationMode stateFromBefore = getDelegationMode(from);
+    AaveTokenV3Harness.DelegationMode stateToBefore = getDelegationMode(to);
+    AaveTokenV3Harness.DelegationMode stateCharlieBefore = getDelegationMode(charlie);
+    
     bool testFromBefore = isDelegatingVoting[from];
     bool testToBefore = isDelegatingVoting[to];
 
     transferFrom(e, from, to, amount);
 
-    uint8 stateFromAfter = getDelegationMode(from);
-    uint8 stateToAfter = getDelegationMode(to);
+    AaveTokenV3Harness.DelegationMode stateFromAfter = getDelegationMode(from);
+    AaveTokenV3Harness.DelegationMode stateToAfter = getDelegationMode(to);
     bool testFromAfter = isDelegatingVoting[from];
     bool testToAfter = isDelegatingVoting[to];
 

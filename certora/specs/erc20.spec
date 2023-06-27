@@ -9,11 +9,11 @@
     Sanity run:
     https://prover.certora.com/output/67509/a5d16a31a49b9c9a7b71/?anonymousKey=bd108549122fd97450428a26c4ed52458793b898
 */
-import "base.spec"
+import "base.spec";
 
 function doesntChangeBalance(method f) returns bool {
-    return f.selector != transfer(address,uint256).selector &&
-        f.selector != transferFrom(address,address,uint256).selector;
+    return f.selector != sig:transfer(address,uint256).selector &&
+        f.selector != sig:transferFrom(address,address,uint256).selector;
 }
 
     
@@ -48,11 +48,11 @@ rule noFeeOnTransferFrom(address alice, address bob, uint256 amount) {
     calldataarg args;
     require alice != bob;
     require allowance(alice, e.msg.sender) >= amount;
-    uint256 balanceBefore = balanceOf(bob);
+    mathint balanceBefore = balanceOf(bob);
 
     transferFrom(e, alice, bob, amount);
 
-    uint256 balanceAfter = balanceOf(bob);
+    mathint balanceAfter = balanceOf(bob);
     assert balanceAfter == balanceBefore + amount;
 }
 
@@ -84,13 +84,13 @@ rule noFeeOnTransfer(address bob, uint256 amount) {
     env e;
     calldataarg args;
     require bob != e.msg.sender;
-    uint256 balanceSenderBefore = balanceOf(e.msg.sender);
-    uint256 balanceBefore = balanceOf(bob);
+    mathint balanceSenderBefore = balanceOf(e.msg.sender);
+    mathint balanceBefore = balanceOf(bob);
 
     transfer(e, bob, amount);
 
-    uint256 balanceAfter = balanceOf(bob);
-    uint256 balanceSenderAfter = balanceOf(e.msg.sender);
+    mathint balanceAfter = balanceOf(bob);
+    mathint balanceSenderAfter = balanceOf(e.msg.sender);
     assert balanceAfter == balanceBefore + amount;
 }
 
@@ -131,8 +131,6 @@ rule transferCorrect(address to, uint256 amount) {
     uint256 fromBalanceBefore = balanceOf(e.msg.sender);
     uint256 toBalanceBefore = balanceOf(to);
     require fromBalanceBefore + toBalanceBefore < AAVE_MAX_SUPPLY() / 100;
-    //    require getDelegationMode(e.msg.sender) <= 3;
-    //require getDelegationMode(to) <= 3;
     
     // proven elsewhere
     address v_delegateTo = getVotingDelegate(to);
@@ -157,7 +155,7 @@ rule transferCorrect(address to, uint256 amount) {
                 (getDelegatingProposition(to) && p_delegateTo == to));
     require validDelegationMode(p_delegateFrom) && validDelegationMode(p_delegateTo);
     require validDelegationMode(v_delegateFrom) && validDelegationMode(v_delegateTo);
-    
+
     // to not overcomplicate the constraints on dvbTo and dvbFrom
     require v_delegateFrom != v_delegateTo && p_delegateFrom != p_delegateTo;
 
@@ -167,20 +165,11 @@ rule transferCorrect(address to, uint256 amount) {
         if (e.msg.sender == to) {
             assert balanceOf(e.msg.sender) == fromBalanceBefore;
         } else {
-            assert balanceOf(e.msg.sender) == fromBalanceBefore - amount;
-            assert balanceOf(to) == toBalanceBefore + amount;
+            assert to_mathint(balanceOf(e.msg.sender)) == fromBalanceBefore - amount;
+            assert to_mathint(balanceOf(to)) == toBalanceBefore + amount;
         }
     } else {
-        uint256 POWER_SCALE_FACTOR = 10000000000;
-        uint256 fromBalanceAfter = fromBalanceBefore - amount;
-        uint256 toBalanceAfter = toBalanceBefore + amount;
-       
-        assert amount > fromBalanceBefore || to == 0 //||
-            //        fromBalanceBefore / POWER_SCALE_FACTOR > 2^72-1 ||
-            //            fromBalanceAfter / POWER_SCALE_FACTOR > 2^72-1 ||
-            //toBalanceBefore / POWER_SCALE_FACTOR > 2^72-1 ||
-            //toBalanceAfter / POWER_SCALE_FACTOR > 2^72-1
-            ;
+        assert amount > fromBalanceBefore || to == 0;
     }
 }
 
@@ -220,14 +209,14 @@ rule transferFromCorrect(address from, address to, uint256 amount) {
     uint256 fromBalanceBefore = balanceOf(from);
     uint256 toBalanceBefore = balanceOf(to);
     uint256 allowanceBefore = allowance(from, e.msg.sender);
-    require fromBalanceBefore + toBalanceBefore < AAVE_MAX_SUPPLY();
+    require fromBalanceBefore + toBalanceBefore < to_mathint(AAVE_MAX_SUPPLY());
 
     transferFrom(e, from, to, amount);
 
     assert from != to =>
-        balanceOf(from) == fromBalanceBefore - amount &&
-        balanceOf(to) == toBalanceBefore + amount &&
-        (allowance(from, e.msg.sender) == allowanceBefore - amount ||
+        to_mathint(balanceOf(from)) == fromBalanceBefore - amount &&
+        to_mathint(balanceOf(to)) == toBalanceBefore + amount &&
+        (to_mathint(allowance(from, e.msg.sender)) == allowanceBefore - amount ||
          allowance(from, e.msg.sender) == max_uint256);
 }
 
@@ -247,7 +236,7 @@ rule transferFromCorrect(address from, address to, uint256 amount) {
 
 */
 invariant ZeroAddressNoBalance()
-    balanceOf(0) == 0
+    balanceOf(0) == 0;
 
 
 /*
@@ -274,7 +263,7 @@ invariant ZeroAddressNoBalance()
 
 */
 rule NoChangeTotalSupply(method f) {
-    // require f.selector != burn(uint256).selector && f.selector != mint(address, uint256).selector;
+    // require f.selector != sig:burn(uint256).selector && f.selector != sig:mint(address, uint256).selector;
     uint256 totalSupplyBefore = totalSupply();
     env e;
     calldataarg args;
@@ -334,7 +323,7 @@ rule noMintingTokens(method f) {
 rule ChangingAllowance(method f, address from, address spender) {
     uint256 allowanceBefore = allowance(from, spender);
     env e;
-    if (f.selector == approve(address, uint256).selector) {
+    if (f.selector == sig:approve(address, uint256).selector) {
         address spender_;
         uint256 amount;
         approve(e, spender_, amount);
@@ -343,34 +332,34 @@ rule ChangingAllowance(method f, address from, address spender) {
         } else {
             assert allowance(from, spender) == allowanceBefore;
         }
-    } else if (f.selector == transferFrom(address,address,uint256).selector) {
+    } else if (f.selector == sig:transferFrom(address,address,uint256).selector) {
         address from_;
         address to;
-        address amount;
+        uint256 amount;
         transferFrom(e, from_, to, amount);
-        uint256 allowanceAfter = allowance(from, spender);
+        mathint allowanceAfter = allowance(from, spender);
         if (from == from_ && spender == e.msg.sender) {
             assert from == to || allowanceBefore == max_uint256 || allowanceAfter == allowanceBefore - amount;
         } else {
             assert allowance(from, spender) == allowanceBefore;
         }
-    } else if (f.selector == decreaseAllowance(address, uint256).selector) {
+    } else if (f.selector == sig:decreaseAllowance(address, uint256).selector) {
         address spender_;
         uint256 amount;
         require amount <= allowanceBefore;
         decreaseAllowance(e, spender_, amount);
         if (from == e.msg.sender && spender == spender_) {
-            assert allowance(from, spender) == allowanceBefore - amount;
+            assert to_mathint(allowance(from, spender)) == allowanceBefore - amount;
         } else {
             assert allowance(from, spender) == allowanceBefore;
         }
-    } else if (f.selector == increaseAllowance(address, uint256).selector) {
+    } else if (f.selector == sig:increaseAllowance(address, uint256).selector) {
         address spender_;
         uint256 amount;
         require amount + allowanceBefore < max_uint256;
         increaseAllowance(e, spender_, amount);
         if (from == e.msg.sender && spender == spender_) {
-            assert allowance(from, spender) == allowanceBefore + amount;
+            assert to_mathint(allowance(from, spender)) == allowanceBefore + amount;
         } else {
             assert allowance(from, spender) == allowanceBefore;
         }
@@ -380,7 +369,7 @@ rule ChangingAllowance(method f, address from, address spender) {
         calldataarg args;
         f(e, args);
         assert allowance(from, spender) == allowanceBefore ||
-            f.selector == permit(address,address,uint256,uint256,uint8,bytes32,bytes32).selector;
+            f.selector == sig:permit(address,address,uint256,uint256,uint8,bytes32,bytes32).selector;
     }
 }
 
@@ -410,7 +399,6 @@ rule TransferSumOfFromAndToBalancesStaySame(address to, uint256 amount) {
     env e;
     mathint sum = balanceOf(e.msg.sender) + balanceOf(to);
     require sum < max_uint256;
-    //require sum < 100;
     transfer(e, to, amount); 
     assert balanceOf(e.msg.sender) + balanceOf(to) == sum;
 }
@@ -539,14 +527,14 @@ rule OtherBalanceOnlyGoesUp(address other, method f) {
     require other != currentContract;
     uint256 balanceBefore = balanceOf(other);
 
-    if (f.selector == transferFrom(address, address, uint256).selector) {
+    if (f.selector == sig:transferFrom(address, address, uint256).selector) {
         address from;
         address to;
         uint256 amount;
         require(other != from);
         require balanceOf(from) + balanceBefore < max_uint256;
         transferFrom(e, from, to, amount);
-    } else if (f.selector == transfer(address, uint256).selector) {
+    } else if (f.selector == sig:transfer(address, uint256).selector) {
         require other != e.msg.sender;
         require balanceOf(e.msg.sender) + balanceBefore < max_uint256;
         calldataarg args;

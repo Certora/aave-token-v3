@@ -12,7 +12,7 @@
 
 pragma solidity ^0.8.0;
 
-import {AaveTokenV3} from '../munged/src/AaveTokenV3.sol';
+import {AaveTokenV3} from '../../src/AaveTokenV3.sol';
 import {DelegationMode} from '../../src/DelegationAwareBalance.sol';
 
 contract AaveTokenV3Harness is AaveTokenV3 {
@@ -50,7 +50,7 @@ contract AaveTokenV3Harness is AaveTokenV3 {
     return _propositionDelegatee[user];
   }
 
-  function getDelegationMode(address user) public view returns (uint8) {
-    return uint8(_balances[user].delegationMode);
+  function getDelegationMode(address user) public view returns (DelegationMode) {
+    return _balances[user].delegationMode;
   }
 }

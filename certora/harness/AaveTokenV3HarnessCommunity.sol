@@ -10,7 +10,7 @@ pragma solidity ^0.8.0;
 
 import {AaveTokenV3} from '../../src/AaveTokenV3.sol';
 import {DelegationMode} from '../../src/DelegationAwareBalance.sol';
-import {ECDSA} from 'lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol';
+import {ECDSA} from 'openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol';
 
 contract AaveTokenV3Harness is AaveTokenV3 {
   function getBalance(address user) public view returns (uint104) {
