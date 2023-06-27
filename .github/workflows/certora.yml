@@ -17,11 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Check key
-        env:
-          CERTORAKEY: ${{ secrets.CERTORAKEY }}
-        run: echo "key length" ${#CERTORAKEY}
-
       - name: Install python
         uses: actions/setup-python@v2
         with: { python-version: 3.9 }
