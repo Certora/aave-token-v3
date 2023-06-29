@@ -54,4 +54,4 @@ jobs:
           - delegate.conf
           - community.conf
           - erc20.conf
-          
+    
