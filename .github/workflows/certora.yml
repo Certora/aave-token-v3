@@ -16,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
 
       - name: Install python
         uses: actions/setup-python@v2
@@ -26,7 +28,7 @@ jobs:
         with: { java-version: "11", java-package: jre }
 
       - name: Install certora cli
-        run: pip install certora-cli-beta
+        run: pip3 install certora-cli-beta
 
       - name: Install solc
         run: |
