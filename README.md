@@ -17,7 +17,7 @@ More detailed description and specification [HERE](./properties.md)
 This repository requires having Foundry installed in the running machine. Instructions on how to do it [HERE](https://github.com/foundry-rs/foundry#installation).
 
 After having installed Foundry:
-1. Add a `.env` file with properly configured `ETH_RPC_URL` and `FORK_BLOCK`, following the example on `.env.example` 
+1. Add a `.env` file with properly configured `RPC_MAINNET` and `FORK_BLOCK`, following the example on `.env.example` 
 2. `make test` to run the simulation tests.
 
 <br>
@@ -29,7 +29,7 @@ After having installed Foundry:
     - [Storage layout diffs](./diffs/)
 - Security review and properties checking (formal verification) by [Certora](https://www.certora.com/), service provider of the Aave DAO.
     - [Properties](./certora/README.md)
-    - [Reports](./certora/report/Formal%20Verification%20Report%20of%20AAVE%20Token%20V3.md)
+    - [Reports](./certora/reports/Formal_Verification_Report_AAVE_Token_V3.pdf)
 
 <br>
 
