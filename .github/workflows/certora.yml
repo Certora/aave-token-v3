@@ -3,7 +3,6 @@ name: certora
 on:
   push:
     branches:
-      - main
       - certora
   pull_request:
     branches:
