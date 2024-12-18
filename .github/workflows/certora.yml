@@ -13,47 +13,39 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install python
-        uses: actions/setup-python@v2
-        with: { python-version: 3.9 }
-
       - name: Install java
-        uses: actions/setup-java@v1
-        with: { java-version: "11", java-package: jre }
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          java-package: jre
 
-      - name: Install certora cli
-        run: pip3 install certora-cli
-
-      - name: Install solc
-        run: |
-          wget https://github.com/ethereum/solidity/releases/download/v0.8.13/solc-static-linux
-          chmod +x solc-static-linux
-          sudo mv solc-static-linux /usr/local/bin/solc8.13
-
-      - name: Verify rule ${{ matrix.rule }}
+      - name: Install
         run: |
           cd certora
           touch applyHarness.patch
           make munged
-          cd ..
-          echo "key length" ${#CERTORAKEY}
-          certoraRun certora/conf/${{ matrix.rule }}
+
+      - uses: Certora/certora-run-action@main
+        with:
+          configurations: |-
+            certora/conf/general.conf
+            certora/conf/delegate.conf
+            certora/conf/community.conf
+            certora/conf/erc20.conf
+          solc-versions: 0.8.13
+          solc-remove-version-prefix: '0.'
+          job-name: 'Verify Rules'
+          server: 'vaas-dev'
+          certora-key: ${{ secrets.CERTORAKEY }}
         env:
           CERTORAKEY: ${{ secrets.CERTORAKEY }}
-
-    strategy:
-      fail-fast: false
-      max-parallel: 16
-      matrix:
-        rule:
-          - general.conf
-          - delegate.conf
-          - community.conf
-          - erc20.conf
-    
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
