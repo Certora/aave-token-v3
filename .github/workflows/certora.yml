@@ -27,7 +27,7 @@ jobs:
         with:
           java-version: '11'
           java-package: jre
-          java-distribution: zulu
+          distribution: zulu
 
       - name: Install
         run: |
