@@ -73,7 +73,7 @@ ghost mapping(address => mathint) balances {
     and etc.
 
 */
-hook Sstore _balances[KEY address user].delegationMode AaveTokenV3Harness.DelegationMode new_state (AaveTokenV3Harness.DelegationMode old_state) STORAGE {
+hook Sstore _balances[KEY address user].delegationMode AaveTokenV3Harness.DelegationMode new_state (AaveTokenV3Harness.DelegationMode old_state)  {
     
     bool willDelegateP = !DELEGATING_PROPOSITION(old_state) && DELEGATING_PROPOSITION(new_state);
     bool wasDelegatingP = DELEGATING_PROPOSITION(old_state) && !DELEGATING_PROPOSITION(new_state);
@@ -112,7 +112,7 @@ hook Sstore _balances[KEY address user].delegationMode AaveTokenV3Harness.Delega
     Depending on the delegation state, either the delegated or the undelegated balance get updated.
 
 */
-hook Sstore _balances[KEY address user].balance uint104 balance (uint104 old_balance) STORAGE {
+hook Sstore _balances[KEY address user].balance uint104 balance (uint104 old_balance)  {
     balances[user] = balances[user] - old_balance + balance;
     // we cannot use if statements inside hooks, hence the ternary operator
     sumDelegatedBalancesV = isDelegatingVoting[user] 

@@ -842,10 +842,10 @@ invariant inv_sumAllBalance_eq_totalSupply()
 ghost sumAllBalance() returns mathint {
     init_state axiom sumAllBalance() == 0;
 }
-hook Sstore _balances[KEY address a] uint256 balance (uint256 old_balance) STORAGE {
+hook Sstore _balances[KEY address a] uint256 balance (uint256 old_balance)  {
   havoc sumAllBalance assuming sumAllBalance@new() == sumAllBalance@old() + balance - old_balance;
 }
-hook Sload uint256 balance _balances[KEY address a] STORAGE {
+hook Sload uint256 balance _balances[KEY address a]  {
     require to_mathint(balance) <= sumAllBalance();
 }
 */
@@ -854,10 +854,10 @@ hook Sload uint256 balance _balances[KEY address a] STORAGE {
 ghost mapping(address => bool) mirror_approvedSenders { 
     init_state axiom forall address a. mirror_approvedSenders[a] == false;
 }
-hook Sstore _approvedSenders[KEY address key] bool newVal (bool oldVal) STORAGE {
+hook Sstore _approvedSenders[KEY address key] bool newVal (bool oldVal)  {
     mirror_approvedSenders[key] = newVal;
 }
-hook Sload bool val _approvedSenders[KEY address key] STORAGE {
+hook Sload bool val _approvedSenders[KEY address key]  {
     require(mirror_approvedSenders[key] == val);
 }
 */
@@ -875,7 +875,7 @@ ghost mapping(address => mathint) sum_all_proposition_delegated_power {
 ghost mapping(address => address) mirror_votingDelegatee { 
     init_state axiom forall address a. mirror_votingDelegatee[a] == 0;
 }
-hook Sstore _votingDelegatee[KEY address delegator] address new_delegatee (address old_delegatee) STORAGE {
+hook Sstore _votingDelegatee[KEY address delegator] address new_delegatee (address old_delegatee)  {
     mirror_votingDelegatee[delegator] = new_delegatee;
     if ((mirror_delegationMode[delegator]==FULL_POWER_DELEGATED() ||
          mirror_delegationMode[delegator]==VOTING_DELEGATED()) &&
@@ -886,7 +886,7 @@ hook Sstore _votingDelegatee[KEY address delegator] address new_delegatee (addre
             sum_all_voting_delegated_power[old_delegatee] - (mirror_balance[delegator]/(10^10)*(10^10));
     }
 }
-hook Sload address val _votingDelegatee[KEY address delegator] STORAGE {
+hook Sload address val _votingDelegatee[KEY address delegator]  {
     require(mirror_votingDelegatee[delegator] == val);
 }
 invariant mirror_votingDelegatee_correct()
@@ -899,7 +899,7 @@ invariant mirror_votingDelegatee_correct()
 ghost mapping(address => address) mirror_propositionDelegatee { 
     init_state axiom forall address a. mirror_propositionDelegatee[a] == 0;
 }
-hook Sstore _propositionDelegatee[KEY address delegator] address new_delegatee (address old_delegatee) STORAGE {
+hook Sstore _propositionDelegatee[KEY address delegator] address new_delegatee (address old_delegatee)  {
     mirror_propositionDelegatee[delegator] = new_delegatee;
     if ((mirror_delegationMode[delegator]==FULL_POWER_DELEGATED() ||
          mirror_delegationMode[delegator]==PROPOSITION_DELEGATED()) &&
@@ -910,7 +910,7 @@ hook Sstore _propositionDelegatee[KEY address delegator] address new_delegatee (
             sum_all_proposition_delegated_power[old_delegatee] - (mirror_balance[delegator]/(10^10)*(10^10));
     }
 }
-hook Sload address val _propositionDelegatee[KEY address delegator] STORAGE {
+hook Sload address val _propositionDelegatee[KEY address delegator]  {
     require(mirror_propositionDelegatee[delegator] == val);
 }
 invariant mirror_propositionDelegatee_correct()
@@ -924,7 +924,7 @@ ghost mapping(address => AaveTokenV3Harness.DelegationMode) mirror_delegationMod
     init_state axiom forall address a. mirror_delegationMode[a] ==
         AaveTokenV3Harness.DelegationMode.NO_DELEGATION;
 }
-hook Sstore _balances[KEY address a].delegationMode AaveTokenV3Harness.DelegationMode newVal (AaveTokenV3Harness.DelegationMode oldVal) STORAGE {
+hook Sstore _balances[KEY address a].delegationMode AaveTokenV3Harness.DelegationMode newVal (AaveTokenV3Harness.DelegationMode oldVal)  {
     mirror_delegationMode[a] = newVal;
 
     if ( (newVal==VOTING_DELEGATED() || newVal==FULL_POWER_DELEGATED())
@@ -945,7 +945,7 @@ hook Sstore _balances[KEY address a].delegationMode AaveTokenV3Harness.Delegatio
             (mirror_balance[a]/(10^10)*(10^10));
     }
 }
-hook Sload AaveTokenV3Harness.DelegationMode val _balances[KEY address a].delegationMode STORAGE {
+hook Sload AaveTokenV3Harness.DelegationMode val _balances[KEY address a].delegationMode  {
     require(mirror_delegationMode[a] == val);
 }
 invariant mirror_delegationMode_correct()
@@ -959,7 +959,7 @@ invariant mirror_delegationMode_correct()
 ghost mapping(address => uint104) mirror_balance { 
     init_state axiom forall address a. mirror_balance[a] == 0;
 }
-hook Sstore _balances[KEY address a].balance uint104 balance (uint104 old_balance) STORAGE {
+hook Sstore _balances[KEY address a].balance uint104 balance (uint104 old_balance)  {
     mirror_balance[a] = balance;
     //sum_all_voting_delegated_power[a] = sum_all_voting_delegated_power[a] + balance - old_balance;
     // The code should be:
@@ -980,7 +980,7 @@ hook Sstore _balances[KEY address a].balance uint104 balance (uint104 old_balanc
             sum_all_proposition_delegated_power[mirror_propositionDelegatee[a]] +
             (balance/ (10^10) * (10^10)) - (old_balance/ (10^10) * (10^10)) ;
 }
-hook Sload uint104 bal _balances[KEY address a].balance STORAGE {
+hook Sload uint104 bal _balances[KEY address a].balance  {
     require(mirror_balance[a] == bal);
 }
 invariant mirror_balance_correct()
